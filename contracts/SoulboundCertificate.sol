@@ -2,14 +2,16 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 /**
  * @title SoulboundCertificate
  * @dev Implementation of non-transferable NFTs (Soulbound Tokens) for certificates
  */
-contract SoulboundCertificate is ERC721, Ownable {
+contract SoulboundCertificate is ERC721, ERC721Enumerable, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
@@ -68,7 +70,7 @@ contract SoulboundCertificate is ERC721, Ownable {
         return newTokenId;
     }
 
-    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+    function tokenURI(uint256 tokenId) public view override(ERC721) returns (string memory) {
         require(_exists(tokenId), "Certificate does not exist");
         return _tokenURIs[tokenId];
     }
@@ -88,19 +90,20 @@ contract SoulboundCertificate is ERC721, Ownable {
         address from,
         address to,
         uint256 tokenId,
-        uint256 /* batchSize */
-    ) internal virtual override {
+        uint256 batchSize
+    ) internal virtual override(ERC721, ERC721Enumerable) {
         require(
             from == address(0) || to == address(0),
             "Soulbound: token transfer not allowed"
         );
+        super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
 
     function transferFrom(
         address from,
         address to,
         uint256 tokenId
-    ) public virtual override {
+    ) public virtual override(ERC721, IERC721) {
         require(
             from == address(0) || to == address(0),
             "Soulbound: token transfer not allowed"
@@ -112,7 +115,7 @@ contract SoulboundCertificate is ERC721, Ownable {
         address from,
         address to,
         uint256 tokenId
-    ) public virtual override {
+    ) public virtual override(ERC721, IERC721) {
         require(
             from == address(0) || to == address(0),
             "Soulbound: token transfer not allowed"
@@ -125,11 +128,21 @@ contract SoulboundCertificate is ERC721, Ownable {
         address to,
         uint256 tokenId,
         bytes memory data
-    ) public virtual override {
+    ) public virtual override(ERC721, IERC721) {
         require(
             from == address(0) || to == address(0),
             "Soulbound: token transfer not allowed"
         );
         super.safeTransferFrom(from, to, tokenId, data);
+    }
+
+    // The following functions are overrides required by Solidity
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC721, ERC721Enumerable)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
     }
 } 

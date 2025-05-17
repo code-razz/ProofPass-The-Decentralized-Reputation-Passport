@@ -18,6 +18,10 @@ import {
 } from '@chakra-ui/react'
 import { useWeb3Modal } from '../context/Web3ModalContext'
 import { ethers } from 'ethers'
+import SoulboundCertificate from '../../artifacts/contracts/SoulboundCertificate.sol/SoulboundCertificate.json'
+
+// Add contract address constant
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
 
 interface Certificate {
   id: number
@@ -41,23 +45,64 @@ export default function Certificates() {
   }, [isConnected, provider])
 
   const fetchCertificates = async () => {
-    if (!provider || !address) return
+    if (!provider || !address || !CONTRACT_ADDRESS) return
 
     setIsLoading(true)
     try {
-      // TODO: Implement contract calls to fetch certificates
-      // This is a placeholder for demonstration
-      const mockCertificates: Certificate[] = [
-        {
-          id: 1,
-          name: 'Web3 Development Certificate',
-          description: 'Completed advanced Web3 development course',
-          issuer: '0x1234...5678',
-          issueDate: '2024-03-15',
-          ipfsHash: 'Qm...',
-        },
-      ]
-      setCertificates(mockCertificates)
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        SoulboundCertificate.abi,
+        provider
+      )
+
+      // Get balance of the connected address instead of total supply
+      const balance = await contract.balanceOf(address)
+      const certificates: Certificate[] = []
+
+      // If user has no certificates, return empty array
+      if (balance === 0n) {
+        setCertificates([])
+        return
+      }
+
+      // Get all token IDs owned by the address
+      const tokenIds: bigint[] = []
+      for (let i = 0; i < balance; i++) {
+        try {
+          const tokenId = await contract.tokenOfOwnerByIndex(address, i)
+          tokenIds.push(tokenId)
+        } catch (error) {
+          console.error(`Error fetching token ${i}:`, error)
+          continue
+        }
+      }
+
+      // Fetch details for each token
+      for (const tokenId of tokenIds) {
+        try {
+          const ipfsHash = await contract.tokenURI(tokenId)
+          const issuer = await contract.getIssuer(tokenId)
+          const issueDate = await contract.getIssueDate(tokenId)
+
+          // Fetch metadata from IPFS
+          const response = await fetch(`https://ipfs.io/ipfs/${ipfsHash}`)
+          const metadata = await response.json()
+
+          certificates.push({
+            id: Number(tokenId),
+            name: metadata.name,
+            description: metadata.description,
+            issuer: issuer,
+            issueDate: new Date(Number(issueDate) * 1000).toLocaleDateString(),
+            ipfsHash: ipfsHash,
+          })
+        } catch (error) {
+          console.error(`Error fetching certificate ${tokenId}:`, error)
+          continue
+        }
+      }
+
+      setCertificates(certificates)
     } catch (error) {
       console.error('Error fetching certificates:', error)
       toast({

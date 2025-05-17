@@ -18,10 +18,15 @@ import {
 } from '@chakra-ui/react'
 import { useWeb3Modal } from '../context/Web3ModalContext'
 import axios from 'axios'
+import { ethers } from 'ethers'
+import SoulboundCertificate from '../../artifacts/contracts/SoulboundCertificate.sol/SoulboundCertificate.json'
 
 // Pinata API configuration
 const PINATA_API_KEY = process.env.NEXT_PUBLIC_PINATA_API_KEY
 const PINATA_API_SECRET = process.env.NEXT_PUBLIC_PINATA_API_SECRET
+
+// Add contract address constant
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
 
 // Debug logging
 console.log('Environment check:', {
@@ -36,6 +41,7 @@ export default function IssuerDashboard() {
   const toast = useToast()
   const [isLoading, setIsLoading] = useState(false)
   const [pinataConfigured, setPinataConfigured] = useState(false)
+  const [isAuthorizedIssuer, setIsAuthorizedIssuer] = useState(false)
   const [formData, setFormData] = useState({
     recipientAddress: '',
     certificateName: '',
@@ -50,7 +56,29 @@ export default function IssuerDashboard() {
     } else {
       setPinataConfigured(true)
     }
-  }, [])
+
+    // Check if connected wallet is an authorized issuer
+    if (isConnected && provider && CONTRACT_ADDRESS) {
+      checkIssuerAuthorization()
+    }
+  }, [isConnected, provider])
+
+  const checkIssuerAuthorization = async () => {
+    if (!provider || !address || !CONTRACT_ADDRESS) return
+
+    try {
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        SoulboundCertificate.abi,
+        provider
+      )
+      const isAuthorized = await contract.authorizedIssuers(address)
+      setIsAuthorizedIssuer(isAuthorized)
+    } catch (error) {
+      console.error('Error checking issuer authorization:', error)
+      setIsAuthorizedIssuer(false)
+    }
+  }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -108,10 +136,21 @@ export default function IssuerDashboard() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!isConnected || !provider) {
+    if (!isConnected || !provider || !CONTRACT_ADDRESS) {
       toast({
         title: 'Error',
         description: 'Please connect your wallet first',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
+
+    if (!isAuthorizedIssuer) {
+      toast({
+        title: 'Error',
+        description: 'Your wallet is not authorized to issue certificates',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -148,14 +187,21 @@ export default function IssuerDashboard() {
 
       const ipfsHash = await uploadToPinata(metadata)
 
-      // TODO: Call smart contract to issue certificate
-      // This will be implemented after contract deployment
-      console.log('IPFS Hash:', ipfsHash)
-      console.log('Recipient:', formData.recipientAddress)
+      // Get signer and contract instance
+      const signer = await provider.getSigner()
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        SoulboundCertificate.abi,
+        signer
+      )
+
+      // Issue certificate
+      const tx = await contract.issueCertificate(formData.recipientAddress, ipfsHash)
+      await tx.wait()
 
       toast({
         title: 'Success',
-        description: 'Certificate metadata uploaded to IPFS',
+        description: 'Certificate issued successfully',
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -192,13 +238,27 @@ export default function IssuerDashboard() {
     )
   }
 
+  if (!isAuthorizedIssuer) {
+    return (
+      <Container maxW="container.xl" py={10}>
+        <VStack spacing={4}>
+          <Heading>Issuer Dashboard</Heading>
+          <Alert status="error">
+            <AlertIcon />
+            Your wallet is not authorized to issue certificates. Please contact the contract owner for authorization.
+          </Alert>
+        </VStack>
+      </Container>
+    )
+  }
+
   return (
     <Container maxW="container.xl" py={10}>
       <VStack spacing={8} align="stretch">
         <Box>
           <Heading mb={4}>Issue New Certificate</Heading>
           <Text color="gray.600">
-            Connected as issuer: {address?.slice(0, 6)}...{address?.slice(-4)}
+            Connected as authorized issuer: {address?.slice(0, 6)}...{address?.slice(-4)}
           </Text>
           {!pinataConfigured && (
             <Alert status="error" mt={4}>
