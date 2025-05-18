@@ -3,7 +3,7 @@ require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
 const { resolve } = require("path");
 
-const config: HardhatUserConfig = {
+const config: typeof HardhatUserConfig = {
   solidity: {
     version: "0.8.20",
     settings: {
