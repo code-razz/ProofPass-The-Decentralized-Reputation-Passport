@@ -88,17 +88,21 @@ export default function AdminDashboard() {
       
       // Process authorization events
       events.forEach(event => {
-        const issuerAddress = event.args?.issuer.toLowerCase()
-        if (issuerAddress) {
-          issuerMap.set(issuerAddress, true)
+        if ('args' in event && event.args) {
+          const issuerAddress = event.args.issuer.toLowerCase()
+          if (issuerAddress) {
+            issuerMap.set(issuerAddress, true)
+          }
         }
       })
 
       // Process revocation events
       revokeEvents.forEach(event => {
-        const issuerAddress = event.args?.issuer.toLowerCase()
-        if (issuerAddress) {
-          issuerMap.set(issuerAddress, false)
+        if ('args' in event && event.args) {
+          const issuerAddress = event.args.issuer.toLowerCase()
+          if (issuerAddress) {
+            issuerMap.set(issuerAddress, false)
+          }
         }
       })
 
