@@ -15,6 +15,8 @@ import {
   Text,
   Alert,
   AlertIcon,
+  InputGroup,
+  InputRightElement,
 } from '@chakra-ui/react'
 import { useWeb3Modal } from '../context/Web3ModalContext'
 import axios from 'axios'
@@ -46,7 +48,9 @@ export default function IssuerDashboard() {
     recipientAddress: '',
     certificateName: '',
     description: '',
+    pdfFile: null as File | null,
   })
+  const [pdfFileName, setPdfFileName] = useState('')
 
   useEffect(() => {
     // Check if Pinata credentials are configured
@@ -86,6 +90,24 @@ export default function IssuerDashboard() {
       ...prev,
       [name]: value,
     }))
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        toast({
+          title: 'Invalid file type',
+          description: 'Please upload a PDF file',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        })
+        return
+      }
+      setFormData(prev => ({ ...prev, pdfFile: file }))
+      setPdfFileName(file.name)
+    }
   }
 
   const uploadToPinata = async (metadata: any) => {
@@ -134,6 +156,46 @@ export default function IssuerDashboard() {
     }
   }
 
+  const uploadFileToPinata = async (file: File) => {
+    if (!PINATA_API_KEY || !PINATA_API_SECRET) {
+      throw new Error('Pinata credentials not configured')
+    }
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await axios.post(
+        'https://api.pinata.cloud/pinning/pinFileToIPFS',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'pinata_api_key': PINATA_API_KEY,
+            'pinata_secret_api_key': PINATA_API_SECRET,
+          },
+          maxBodyLength: Infinity,
+          timeout: 30000, // 30 second timeout for file upload
+        }
+      )
+
+      if (!response.data || !response.data.IpfsHash) {
+        throw new Error('Invalid response from Pinata')
+      }
+
+      return response.data.IpfsHash
+    } catch (error: any) {
+      console.error('Error uploading file to Pinata:', error)
+      if (error.response) {
+        throw new Error(`Pinata API Error: ${error.response.data?.error || error.response.statusText}`)
+      } else if (error.request) {
+        throw new Error('No response from Pinata API')
+      } else {
+        throw new Error(`Error setting up request: ${error.message}`)
+      }
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isConnected || !provider || !CONTRACT_ADDRESS) {
@@ -169,14 +231,29 @@ export default function IssuerDashboard() {
       return
     }
 
+    if (!formData.pdfFile) {
+      toast({
+        title: 'Error',
+        description: 'Please upload a PDF certificate',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
+
     setIsLoading(true)
     try {
+      // Upload PDF to IPFS
+      const pdfIpfsHash = await uploadFileToPinata(formData.pdfFile)
+
       // Upload metadata to IPFS via Pinata
       const metadata = {
         name: formData.certificateName,
         description: formData.description,
         issuer: address,
         issueDate: new Date().toISOString(),
+        pdfHash: pdfIpfsHash,
         attributes: [
           {
             trait_type: "Certificate Type",
@@ -185,7 +262,7 @@ export default function IssuerDashboard() {
         ]
       }
 
-      const ipfsHash = await uploadToPinata(metadata)
+      const metadataIpfsHash = await uploadToPinata(metadata)
 
       // Get signer and contract instance
       const signer = await provider.getSigner()
@@ -196,7 +273,7 @@ export default function IssuerDashboard() {
       )
 
       // Issue certificate
-      const tx = await contract.issueCertificate(formData.recipientAddress, ipfsHash)
+      const tx = await contract.issueCertificate(formData.recipientAddress, metadataIpfsHash)
       await tx.wait()
 
       toast({
@@ -212,7 +289,9 @@ export default function IssuerDashboard() {
         recipientAddress: '',
         certificateName: '',
         description: '',
+        pdfFile: null,
       })
+      setPdfFileName('')
     } catch (error: any) {
       console.error('Error:', error)
       toast({
@@ -304,13 +383,45 @@ export default function IssuerDashboard() {
               />
             </FormControl>
 
+            <FormControl isRequired>
+              <FormLabel>Certificate PDF</FormLabel>
+              <InputGroup>
+                <Input
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleFileChange}
+                  display="none"
+                  id="pdf-upload"
+                  isDisabled={!pinataConfigured}
+                />
+                <Input
+                  value={pdfFileName}
+                  placeholder="Upload PDF certificate..."
+                  readOnly
+                  onClick={() => document.getElementById('pdf-upload')?.click()}
+                  cursor="pointer"
+                  isDisabled={!pinataConfigured}
+                />
+                <InputRightElement width="4.5rem">
+                  <Button
+                    h="1.75rem"
+                    size="sm"
+                    onClick={() => document.getElementById('pdf-upload')?.click()}
+                    isDisabled={!pinataConfigured}
+                  >
+                    Browse
+                  </Button>
+                </InputRightElement>
+              </InputGroup>
+            </FormControl>
+
             <Button
               type="submit"
               colorScheme="blue"
               size="lg"
               isLoading={isLoading}
               loadingText="Issuing Certificate..."
-              isDisabled={!pinataConfigured}
+              isDisabled={!pinataConfigured || !formData.pdfFile}
             >
               Issue Certificate
             </Button>

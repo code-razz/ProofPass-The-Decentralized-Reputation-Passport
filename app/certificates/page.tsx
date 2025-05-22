@@ -30,6 +30,7 @@ interface Certificate {
   issuer: string
   issueDate: string
   ipfsHash: string
+  pdfHash: string
 }
 
 export default function Certificates() {
@@ -95,6 +96,7 @@ export default function Certificates() {
             issuer: issuer,
             issueDate: new Date(Number(issueDate) * 1000).toLocaleDateString(),
             ipfsHash: ipfsHash,
+            pdfHash: metadata.pdfHash,
           })
         } catch (error) {
           console.error(`Error fetching certificate ${tokenId}:`, error)
@@ -130,15 +132,36 @@ export default function Certificates() {
   }
 
   const handleDownload = async (certificate: Certificate) => {
-    // TODO: Implement certificate download
-    // This could generate a PDF or JSON file
-    toast({
-      title: 'Download Certificate',
-      description: 'Download functionality coming soon',
-      status: 'info',
-      duration: 3000,
-      isClosable: true,
-    })
+    try {
+      // Create a temporary link element
+      const link = document.createElement('a')
+      link.href = `https://ipfs.io/ipfs/${certificate.pdfHash}`
+      link.download = `${certificate.name.replace(/\s+/g, '_')}_certificate.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      toast({
+        title: 'Download Started',
+        description: 'Your certificate PDF is being downloaded',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    } catch (error) {
+      console.error('Error downloading certificate:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to download certificate',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    }
+  }
+
+  const handleViewPDF = (certificate: Certificate) => {
+    window.open(`https://ipfs.io/ipfs/${certificate.pdfHash}`, '_blank')
   }
 
   if (!isConnected) {
@@ -193,6 +216,14 @@ export default function Certificates() {
                   </Button>
                   <Button
                     colorScheme="purple"
+                    size="sm"
+                    mr={2}
+                    onClick={() => handleViewPDF(certificate)}
+                  >
+                    View PDF
+                  </Button>
+                  <Button
+                    colorScheme="green"
                     size="sm"
                     onClick={() => handleDownload(certificate)}
                   >
