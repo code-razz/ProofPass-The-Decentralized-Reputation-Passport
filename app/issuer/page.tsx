@@ -44,6 +44,8 @@ export default function IssuerDashboard() {
   const [isLoading, setIsLoading] = useState(false)
   const [pinataConfigured, setPinataConfigured] = useState(false)
   const [isAuthorizedIssuer, setIsAuthorizedIssuer] = useState(false)
+  const [hasPendingRequest, setHasPendingRequest] = useState(false)
+  const [requestReason, setRequestReason] = useState('')
   const [formData, setFormData] = useState({
     recipientAddress: '',
     certificateName: '',
@@ -61,9 +63,10 @@ export default function IssuerDashboard() {
       setPinataConfigured(true)
     }
 
-    // Check if connected wallet is an authorized issuer
+    // Check if connected wallet is an authorized issuer and has pending request
     if (isConnected && provider && CONTRACT_ADDRESS) {
       checkIssuerAuthorization()
+      checkPendingRequest()
     }
   }, [isConnected, provider])
 
@@ -81,6 +84,23 @@ export default function IssuerDashboard() {
     } catch (error) {
       console.error('Error checking issuer authorization:', error)
       setIsAuthorizedIssuer(false)
+    }
+  }
+
+  const checkPendingRequest = async () => {
+    if (!provider || !address || !CONTRACT_ADDRESS) return
+
+    try {
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        SoulboundCertificate.abi,
+        provider
+      )
+      const request = await contract.getIssuerRequest(address)
+      setHasPendingRequest(request.isPending)
+    } catch (error) {
+      console.error('Error checking pending request:', error)
+      setHasPendingRequest(false)
     }
   }
 
@@ -306,12 +326,75 @@ export default function IssuerDashboard() {
     }
   }
 
+  const handleSubmitRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!isConnected || !provider || !CONTRACT_ADDRESS) {
+      toast({
+        title: 'Error',
+        description: 'Please connect your wallet first',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
+
+    if (!requestReason.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please provide a reason for your request',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const signer = await provider.getSigner()
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        SoulboundCertificate.abi,
+        signer
+      )
+
+      const tx = await contract.submitIssuerRequest(requestReason)
+      await tx.wait()
+
+      toast({
+        title: 'Success',
+        description: 'Your request to become an issuer has been submitted',
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      })
+
+      setRequestReason('')
+      setHasPendingRequest(true)
+    } catch (error: any) {
+      console.error('Error submitting request:', error)
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to submit request',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   if (!isConnected) {
     return (
       <Container maxW="container.xl" py={10}>
         <VStack spacing={4}>
           <Heading>Issuer Dashboard</Heading>
-          <Text>Please connect your wallet to access the issuer dashboard.</Text>
+          <Alert status="info">
+            <AlertIcon />
+            Please connect your wallet to access the issuer dashboard
+          </Alert>
         </VStack>
       </Container>
     )
@@ -320,12 +403,42 @@ export default function IssuerDashboard() {
   if (!isAuthorizedIssuer) {
     return (
       <Container maxW="container.xl" py={10}>
-        <VStack spacing={4}>
-          <Heading>Issuer Dashboard</Heading>
-          <Alert status="error">
-            <AlertIcon />
-            Your wallet is not authorized to issue certificates. Please contact the contract owner for authorization.
-          </Alert>
+        <VStack spacing={6}>
+          <Heading>Become an Issuer</Heading>
+          <Text>
+            To issue certificates on the platform, you need to be authorized as an issuer.
+            Submit a request below to be considered for authorization.
+          </Text>
+          
+          {hasPendingRequest ? (
+            <Alert status="info">
+              <AlertIcon />
+              Your request to become an issuer is pending review
+            </Alert>
+          ) : (
+            <Box as="form" onSubmit={handleSubmitRequest} w="full" maxW="600px">
+              <VStack spacing={4}>
+                <FormControl isRequired>
+                  <FormLabel>Reason for Request</FormLabel>
+                  <Textarea
+                    value={requestReason}
+                    onChange={(e) => setRequestReason(e.target.value)}
+                    placeholder="Please explain why you want to become an issuer..."
+                    rows={4}
+                  />
+                </FormControl>
+                <Button
+                  type="submit"
+                  colorScheme="blue"
+                  isLoading={isLoading}
+                  loadingText="Submitting..."
+                  w="full"
+                >
+                  Submit Request
+                </Button>
+              </VStack>
+            </Box>
+          )}
         </VStack>
       </Container>
     )
