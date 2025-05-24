@@ -15,10 +15,16 @@ import {
   Button,
   useToast,
   Badge,
+  Tabs,
+  TabList,
+  TabPanels,
+  TabPanel,
+  Tab
 } from '@chakra-ui/react'
 import { useWeb3Modal } from '../context/Web3ModalContext'
 import { ethers } from 'ethers'
 import SoulboundCertificate from '../../artifacts/contracts/SoulboundCertificate.sol/SoulboundCertificate.json'
+import GithubContributions from '../components/GithubContributions'
 
 // Add contract address constant
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
@@ -185,55 +191,69 @@ export default function Certificates() {
           </Text>
         </Box>
 
-        {isLoading ? (
-          <Text>Loading certificates...</Text>
-        ) : certificates.length === 0 ? (
-          <Text>No certificates found.</Text>
-        ) : (
-          <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-            {certificates.map((certificate) => (
-              <Card key={certificate.id} variant="outline">
-                <CardHeader>
-                  <Heading size="md">{certificate.name}</Heading>
-                  <Badge colorScheme="green" mt={2}>
-                    Issued on {certificate.issueDate}
-                  </Badge>
-                </CardHeader>
-                <CardBody>
-                  <Text>{certificate.description}</Text>
-                  <Text fontSize="sm" color="gray.500" mt={2}>
-                    Issuer: {certificate.issuer}
-                  </Text>
-                </CardBody>
-                <CardFooter>
-                  <Button
-                    colorScheme="blue"
-                    size="sm"
-                    mr={2}
-                    onClick={() => handleShare(certificate)}
-                  >
-                    Share
-                  </Button>
-                  <Button
-                    colorScheme="purple"
-                    size="sm"
-                    mr={2}
-                    onClick={() => handleViewPDF(certificate)}
-                  >
-                    View PDF
-                  </Button>
-                  <Button
-                    colorScheme="green"
-                    size="sm"
-                    onClick={() => handleDownload(certificate)}
-                  >
-                    Download
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
-          </SimpleGrid>
-        )}
+        <Tabs isFitted variant="enclosed">
+          <TabList mb="1em">
+            <Tab>Certificates</Tab>
+            <Tab>GitHub Contributions</Tab>
+          </TabList>
+
+          <TabPanels>
+            <TabPanel>
+              {isLoading ? (
+                <Text>Loading certificates...</Text>
+              ) : certificates.length === 0 ? (
+                <Text>No certificates found.</Text>
+              ) : (
+                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+                  {certificates.map((certificate) => (
+                    <Card key={certificate.id} variant="outline">
+                      <CardHeader>
+                        <Heading size="md">{certificate.name}</Heading>
+                        <Badge colorScheme="green" mt={2}>
+                          Issued on {certificate.issueDate}
+                        </Badge>
+                      </CardHeader>
+                      <CardBody>
+                        <Text>{certificate.description}</Text>
+                        <Text fontSize="sm" color="gray.500" mt={2}>
+                          Issuer: {certificate.issuer}
+                        </Text>
+                      </CardBody>
+                      <CardFooter>
+                        <Button
+                          colorScheme="blue"
+                          size="sm"
+                          mr={2}
+                          onClick={() => handleShare(certificate)}
+                        >
+                          Share
+                        </Button>
+                        <Button
+                          colorScheme="purple"
+                          size="sm"
+                          mr={2}
+                          onClick={() => handleViewPDF(certificate)}
+                        >
+                          View PDF
+                        </Button>
+                        <Button
+                          colorScheme="green"
+                          size="sm"
+                          onClick={() => handleDownload(certificate)}
+                        >
+                          Download
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </SimpleGrid>
+              )}
+            </TabPanel>
+            <TabPanel>
+              <GithubContributions />
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
       </VStack>
     </Container>
   )

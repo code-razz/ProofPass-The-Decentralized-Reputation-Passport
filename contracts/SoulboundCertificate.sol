@@ -24,6 +24,9 @@ contract SoulboundCertificate is ERC721, ERC721Enumerable, Ownable {
     // Mapping from token ID to issue date
     mapping(uint256 => uint256) private _issueDates;
 
+    // Mapping for GitHub usernames
+    mapping(address => string) private _githubUsernames;
+
     // Mapping of authorized issuers
     mapping(address => bool) public authorizedIssuers;
 
@@ -163,6 +166,16 @@ contract SoulboundCertificate is ERC721, ERC721Enumerable, Ownable {
     function getIssueDate(uint256 tokenId) public view returns (uint256) {
         require(_exists(tokenId), "Certificate does not exist");
         return _issueDates[tokenId];
+    }
+
+    // Function to set the GitHub username for the connected address
+    function setGithubUsername(string memory _username) public {
+        _githubUsernames[msg.sender] = _username;
+    }
+
+    // Function to get the GitHub username for a given address
+    function getGithubUsername(address _user) public view returns (string memory) {
+        return _githubUsernames[_user];
     }
 
     function submitIssuerRequest(string memory reason) external {
