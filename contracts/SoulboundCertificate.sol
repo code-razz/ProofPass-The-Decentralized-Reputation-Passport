@@ -53,6 +53,23 @@ contract SoulboundCertificate is ERC721, ERC721Enumerable, Ownable {
     // Array to store activity logs
     ActivityLog[] private activityLogs;
 
+    // Certificate verification request system
+    struct VerificationRequest {
+        address requester;
+        uint256 certificateId;
+        string reason;
+        uint256 timestamp;
+        bool isPending;
+        bool isApproved;
+        string rejectionReason;
+    }
+
+    // Mapping from certificate ID to verification requests
+    mapping(uint256 => VerificationRequest[]) public certificateVerificationRequests;
+    
+    // Mapping to track verification status of certificates
+    mapping(uint256 => bool) public isCertificateVerified;
+
     // Events with timestamps
     event CertificateIssued(
         uint256 indexed tokenId,
@@ -88,6 +105,29 @@ contract SoulboundCertificate is ERC721, ERC721Enumerable, Ownable {
     event IssuerRequestRejected(
         address indexed requester,
         address indexed rejector,
+        uint256 timestamp
+    );
+
+    // Events for verification system
+    event VerificationRequestSubmitted(
+        uint256 indexed certificateId,
+        address indexed requester,
+        string reason,
+        uint256 timestamp
+    );
+
+    event VerificationRequestApproved(
+        uint256 indexed certificateId,
+        address indexed requester,
+        address indexed verifier,
+        uint256 timestamp
+    );
+
+    event VerificationRequestRejected(
+        uint256 indexed certificateId,
+        address indexed requester,
+        address indexed rejector,
+        string reason,
         uint256 timestamp
     );
 
@@ -363,5 +403,122 @@ contract SoulboundCertificate is ERC721, ERC721Enumerable, Ownable {
 
     function getActivityLogsCount() external view returns (uint256) {
         return activityLogs.length;
+    }
+
+    // Function to submit a verification request for a certificate
+    function submitVerificationRequest(uint256 certificateId, string memory reason) external {
+        require(_exists(certificateId), "Certificate does not exist");
+        require(ownerOf(certificateId) == msg.sender, "Not the certificate owner");
+        require(!isCertificateVerified[certificateId], "Certificate already verified");
+
+        // Check if there's already a pending request
+        VerificationRequest[] storage requests = certificateVerificationRequests[certificateId];
+        for (uint i = 0; i < requests.length; i++) {
+            require(!requests[i].isPending, "Verification request already pending");
+        }
+
+        requests.push(VerificationRequest({
+            requester: msg.sender,
+            certificateId: certificateId,
+            reason: reason,
+            timestamp: block.timestamp,
+            isPending: true,
+            isApproved: false,
+            rejectionReason: ""
+        }));
+
+        _addActivityLog(
+            msg.sender,
+            _issuers[certificateId],
+            "VERIFICATION_REQUEST",
+            reason
+        );
+
+        emit VerificationRequestSubmitted(certificateId, msg.sender, reason, block.timestamp);
+    }
+
+    // Function for issuers to approve verification requests
+    function approveVerificationRequest(uint256 certificateId, address requester) external onlyAuthorizedIssuer {
+        require(_exists(certificateId), "Certificate does not exist");
+        require(_issuers[certificateId] == msg.sender, "Not the certificate issuer");
+
+        VerificationRequest[] storage requests = certificateVerificationRequests[certificateId];
+        bool found = false;
+
+        for (uint i = 0; i < requests.length; i++) {
+            if (requests[i].requester == requester && requests[i].isPending) {
+                requests[i].isPending = false;
+                requests[i].isApproved = true;
+                isCertificateVerified[certificateId] = true;
+                found = true;
+
+                _addActivityLog(
+                    msg.sender,
+                    requester,
+                    "VERIFICATION_APPROVED",
+                    "Certificate verification approved"
+                );
+
+                emit VerificationRequestApproved(
+                    certificateId,
+                    requester,
+                    msg.sender,
+                    block.timestamp
+                );
+                break;
+            }
+        }
+
+        require(found, "No pending verification request found");
+    }
+
+    // Function for issuers to reject verification requests
+    function rejectVerificationRequest(
+        uint256 certificateId,
+        address requester,
+        string memory reason
+    ) external onlyAuthorizedIssuer {
+        require(_exists(certificateId), "Certificate does not exist");
+        require(_issuers[certificateId] == msg.sender, "Not the certificate issuer");
+
+        VerificationRequest[] storage requests = certificateVerificationRequests[certificateId];
+        bool found = false;
+
+        for (uint i = 0; i < requests.length; i++) {
+            if (requests[i].requester == requester && requests[i].isPending) {
+                requests[i].isPending = false;
+                requests[i].isApproved = false;
+                requests[i].rejectionReason = reason;
+                found = true;
+
+                _addActivityLog(
+                    msg.sender,
+                    requester,
+                    "VERIFICATION_REJECTED",
+                    reason
+                );
+
+                emit VerificationRequestRejected(
+                    certificateId,
+                    requester,
+                    msg.sender,
+                    reason,
+                    block.timestamp
+                );
+                break;
+            }
+        }
+
+        require(found, "No pending verification request found");
+    }
+
+    // Function to get verification requests for a certificate
+    function getCertificateVerificationRequests(uint256 certificateId) external view returns (VerificationRequest[] memory) {
+        return certificateVerificationRequests[certificateId];
+    }
+
+    // Function to get verification status of a certificate
+    function getCertificateVerificationStatus(uint256 certificateId) external view returns (bool) {
+        return isCertificateVerified[certificateId];
     }
 } 

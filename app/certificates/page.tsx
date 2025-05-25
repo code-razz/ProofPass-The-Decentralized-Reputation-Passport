@@ -1,32 +1,42 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Box,
   Container,
   VStack,
   Heading,
   Text,
-  SimpleGrid,
-  Card,
-  CardHeader,
-  CardBody,
-  CardFooter,
   Button,
   useToast,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
   Badge,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalCloseButton,
+  FormControl,
+  FormLabel,
+  Input,
+  Textarea,
+  useDisclosure,
   Tabs,
   TabList,
   TabPanels,
+  Tab,
   TabPanel,
-  Tab
 } from '@chakra-ui/react'
 import { useWeb3Modal } from '../context/Web3ModalContext'
 import { ethers } from 'ethers'
 import SoulboundCertificate from '../../artifacts/contracts/SoulboundCertificate.sol/SoulboundCertificate.json'
-import GithubContributions from '../components/GithubContributions'
 
-// Add contract address constant
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
 
 interface Certificate {
@@ -34,88 +44,86 @@ interface Certificate {
   name: string
   description: string
   issuer: string
-  issueDate: string
-  ipfsHash: string
-  pdfHash: string
+  issueDate: number
+  isVerified: boolean
+  verificationRequests: VerificationRequest[]
 }
 
-export default function Certificates() {
+interface VerificationRequest {
+  requester: string
+  certificateId: number
+  reason: string
+  timestamp: number
+  isPending: boolean
+  isApproved: boolean
+  rejectionReason: string
+}
+
+export default function CertificatesPage() {
   const { address, isConnected, provider } = useWeb3Modal()
   const toast = useToast()
   const [certificates, setCertificates] = useState<Certificate[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
+  const { isOpen, onOpen, onClose } = useDisclosure()
+  const [selectedCertificate, setSelectedCertificate] = useState<Certificate | null>(null)
+  const [verificationReason, setVerificationReason] = useState('')
+  const [rejectionReason, setRejectionReason] = useState('')
 
   useEffect(() => {
-    if (isConnected && provider) {
-      fetchCertificates()
+    if (isConnected && provider && CONTRACT_ADDRESS) {
+      loadCertificates()
     }
   }, [isConnected, provider])
 
-  const fetchCertificates = async () => {
+  const loadCertificates = async () => {
     if (!provider || !address || !CONTRACT_ADDRESS) return
 
-    setIsLoading(true)
     try {
+      setIsLoading(true)
       const contract = new ethers.Contract(
         CONTRACT_ADDRESS,
         SoulboundCertificate.abi,
         provider
       )
 
-      // Get balance of the connected address instead of total supply
-      const balance = await contract.balanceOf(address)
-      const certificates: Certificate[] = []
+      // Get total supply to iterate through all certificates
+      const totalSupply = await contract.totalSupply()
+      const userCertificates: Certificate[] = []
 
-      // If user has no certificates, return empty array
-      if (balance === 0n) {
-        setCertificates([])
-        return
-      }
-
-      // Get all token IDs owned by the address
-      const tokenIds: bigint[] = []
-      for (let i = 0; i < balance; i++) {
+      for (let i = 1; i <= totalSupply; i++) {
         try {
-          const tokenId = await contract.tokenOfOwnerByIndex(address, i)
-          tokenIds.push(tokenId)
+          const owner = await contract.ownerOf(i)
+          if (owner.toLowerCase() === address.toLowerCase()) {
+            const tokenURI = await contract.tokenURI(i)
+            const response = await fetch(`https://ipfs.io/ipfs/${tokenURI}`)
+            const metadata = await response.json()
+
+            const issuer = await contract.getIssuer(i)
+            const issueDate = await contract.getIssueDate(i)
+            const isVerified = await contract.getCertificateVerificationStatus(i)
+            const verificationRequests = await contract.getCertificateVerificationRequests(i)
+
+            userCertificates.push({
+              id: i,
+              name: metadata.name,
+              description: metadata.description,
+              issuer,
+              issueDate,
+              isVerified,
+              verificationRequests,
+            })
+          }
         } catch (error) {
-          console.error(`Error fetching token ${i}:`, error)
-          continue
+          console.error(`Error loading certificate ${i}:`, error)
         }
       }
 
-      // Fetch details for each token
-      for (const tokenId of tokenIds) {
-        try {
-          const ipfsHash = await contract.tokenURI(tokenId)
-          const issuer = await contract.getIssuer(tokenId)
-          const issueDate = await contract.getIssueDate(tokenId)
-
-          // Fetch metadata from IPFS
-          const response = await fetch(`https://ipfs.io/ipfs/${ipfsHash}`)
-          const metadata = await response.json()
-
-          certificates.push({
-            id: Number(tokenId),
-            name: metadata.name,
-            description: metadata.description,
-            issuer: issuer,
-            issueDate: new Date(Number(issueDate) * 1000).toLocaleDateString(),
-            ipfsHash: ipfsHash,
-            pdfHash: metadata.pdfHash,
-          })
-        } catch (error) {
-          console.error(`Error fetching certificate ${tokenId}:`, error)
-          continue
-        }
-      }
-
-      setCertificates(certificates)
+      setCertificates(userCertificates)
     } catch (error) {
-      console.error('Error fetching certificates:', error)
+      console.error('Error loading certificates:', error)
       toast({
         title: 'Error',
-        description: 'Failed to fetch certificates',
+        description: 'Failed to load certificates',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -125,136 +133,321 @@ export default function Certificates() {
     }
   }
 
-  const handleShare = async (certificate: Certificate) => {
-    // TODO: Implement sharing functionality
-    // This could generate a shareable link or QR code
-    toast({
-      title: 'Share Certificate',
-      description: 'Sharing functionality coming soon',
-      status: 'info',
-      duration: 3000,
-      isClosable: true,
-    })
-  }
+  const handleVerificationRequest = async (certificateId: number) => {
+    if (!provider || !address || !CONTRACT_ADDRESS) return
 
-  const handleDownload = async (certificate: Certificate) => {
     try {
-      // Create a temporary link element
-      const link = document.createElement('a')
-      link.href = `https://ipfs.io/ipfs/${certificate.pdfHash}`
-      link.download = `${certificate.name.replace(/\s+/g, '_')}_certificate.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      setIsLoading(true)
+      const signer = await provider.getSigner()
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        SoulboundCertificate.abi,
+        signer
+      )
+
+      const tx = await contract.submitVerificationRequest(certificateId, verificationReason)
+      await tx.wait()
 
       toast({
-        title: 'Download Started',
-        description: 'Your certificate PDF is being downloaded',
+        title: 'Success',
+        description: 'Verification request submitted successfully',
         status: 'success',
         duration: 3000,
         isClosable: true,
       })
-    } catch (error) {
-      console.error('Error downloading certificate:', error)
+
+      onClose()
+      loadCertificates()
+    } catch (error: any) {
+      console.error('Error submitting verification request:', error)
       toast({
         title: 'Error',
-        description: 'Failed to download certificate',
+        description: error.message || 'Failed to submit verification request',
         status: 'error',
         duration: 3000,
         isClosable: true,
       })
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleViewPDF = (certificate: Certificate) => {
-    window.open(`https://ipfs.io/ipfs/${certificate.pdfHash}`, '_blank')
+  const handleApproveVerification = async (certificateId: number, requester: string) => {
+    if (!provider || !address || !CONTRACT_ADDRESS) return
+
+    try {
+      setIsLoading(true)
+      const signer = await provider.getSigner()
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        SoulboundCertificate.abi,
+        signer
+      )
+
+      const tx = await contract.approveVerificationRequest(certificateId, requester)
+      await tx.wait()
+
+      toast({
+        title: 'Success',
+        description: 'Verification request approved',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+
+      loadCertificates()
+    } catch (error: any) {
+      console.error('Error approving verification:', error)
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to approve verification',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  if (!isConnected) {
-    return (
-      <Container maxW="container.xl" py={10}>
-        <VStack spacing={4}>
-          <Heading>My Certificates</Heading>
-          <Text>Please connect your wallet to view your certificates.</Text>
-        </VStack>
-      </Container>
-    )
+  const handleRejectVerification = async (certificateId: number, requester: string) => {
+    if (!provider || !address || !CONTRACT_ADDRESS) return
+
+    try {
+      setIsLoading(true)
+      const signer = await provider.getSigner()
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        SoulboundCertificate.abi,
+        signer
+      )
+
+      const tx = await contract.rejectVerificationRequest(certificateId, requester, rejectionReason)
+      await tx.wait()
+
+      toast({
+        title: 'Success',
+        description: 'Verification request rejected',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+
+      onClose()
+      loadCertificates()
+    } catch (error: any) {
+      console.error('Error rejecting verification:', error)
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to reject verification',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const openVerificationModal = (certificate: Certificate) => {
+    setSelectedCertificate(certificate)
+    setVerificationReason('')
+    onOpen()
+  }
+
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString()
+  }
+
+  const getVerificationStatus = (certificate: Certificate) => {
+    if (certificate.isVerified) {
+      return <Badge colorScheme="green">Verified</Badge>
+    }
+    const pendingRequest = certificate.verificationRequests.find(req => req.isPending)
+    if (pendingRequest) {
+      return <Badge colorScheme="yellow">Pending Verification</Badge>
+    }
+    return <Badge colorScheme="gray">Not Verified</Badge>
   }
 
   return (
-    <Container maxW="container.xl" py={10}>
+    <Container maxW="container.xl" py={8}>
       <VStack spacing={8} align="stretch">
-        <Box>
-          <Heading mb={4}>My Certificates</Heading>
-          <Text color="gray.600">
-            Connected as: {address?.slice(0, 6)}...{address?.slice(-4)}
-          </Text>
-        </Box>
+        <Heading>My Certificates</Heading>
 
-        <Tabs isFitted variant="enclosed">
-          <TabList mb="1em">
-            <Tab>Certificates</Tab>
-            <Tab>GitHub Contributions</Tab>
-          </TabList>
+        {!isConnected ? (
+          <Text>Please connect your wallet to view your certificates</Text>
+        ) : isLoading ? (
+          <Text>Loading certificates...</Text>
+        ) : certificates.length === 0 ? (
+          <Text>You don't have any certificates yet</Text>
+        ) : (
+          <Tabs>
+            <TabList>
+              <Tab>Certificates</Tab>
+              <Tab>Verification Requests</Tab>
+            </TabList>
 
-          <TabPanels>
-            <TabPanel>
-              {isLoading ? (
-                <Text>Loading certificates...</Text>
-              ) : certificates.length === 0 ? (
-                <Text>No certificates found.</Text>
-              ) : (
-                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-                  {certificates.map((certificate) => (
-                    <Card key={certificate.id} variant="outline">
-                      <CardHeader>
-                        <Heading size="md">{certificate.name}</Heading>
-                        <Badge colorScheme="green" mt={2}>
-                          Issued on {certificate.issueDate}
-                        </Badge>
-                      </CardHeader>
-                      <CardBody>
-                        <Text>{certificate.description}</Text>
-                        <Text fontSize="sm" color="gray.500" mt={2}>
-                          Issuer: {certificate.issuer}
-                        </Text>
-                      </CardBody>
-                      <CardFooter>
-                        <Button
-                          colorScheme="blue"
-                          size="sm"
-                          mr={2}
-                          onClick={() => handleShare(certificate)}
-                        >
-                          Share
-                        </Button>
-                        <Button
-                          colorScheme="purple"
-                          size="sm"
-                          mr={2}
-                          onClick={() => handleViewPDF(certificate)}
-                        >
-                          View PDF
-                        </Button>
-                        <Button
-                          colorScheme="green"
-                          size="sm"
-                          onClick={() => handleDownload(certificate)}
-                        >
-                          Download
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ))}
-                </SimpleGrid>
-              )}
-            </TabPanel>
-            <TabPanel>
-              <GithubContributions />
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
+            <TabPanels>
+              <TabPanel>
+                <Table variant="simple">
+                  <Thead>
+                    <Tr>
+                      <Th>Name</Th>
+                      <Th>Issuer</Th>
+                      <Th>Issue Date</Th>
+                      <Th>Status</Th>
+                      <Th>Actions</Th>
+                    </Tr>
+                  </Thead>
+                  <Tbody>
+                    {certificates.map((cert) => (
+                      <Tr key={cert.id}>
+                        <Td>{cert.name}</Td>
+                        <Td>{cert.issuer}</Td>
+                        <Td>{formatDate(cert.issueDate)}</Td>
+                        <Td>{getVerificationStatus(cert)}</Td>
+                        <Td>
+                          {!cert.isVerified && !cert.verificationRequests.some(req => req.isPending) && (
+                            <Button
+                              size="sm"
+                              colorScheme="blue"
+                              onClick={() => openVerificationModal(cert)}
+                            >
+                              Request Verification
+                            </Button>
+                          )}
+                        </Td>
+                      </Tr>
+                    ))}
+                  </Tbody>
+                </Table>
+              </TabPanel>
+
+              <TabPanel>
+                <Table variant="simple">
+                  <Thead>
+                    <Tr>
+                      <Th>Certificate</Th>
+                      <Th>Requester</Th>
+                      <Th>Reason</Th>
+                      <Th>Date</Th>
+                      <Th>Status</Th>
+                      <Th>Actions</Th>
+                    </Tr>
+                  </Thead>
+                  <Tbody>
+                    {certificates.flatMap((cert) =>
+                      cert.verificationRequests.map((req, index) => (
+                        <Tr key={`${cert.id}-${index}`}>
+                          <Td>{cert.name}</Td>
+                          <Td>{req.requester}</Td>
+                          <Td>{req.reason}</Td>
+                          <Td>{formatDate(req.timestamp)}</Td>
+                          <Td>
+                            {req.isPending ? (
+                              <Badge colorScheme="yellow">Pending</Badge>
+                            ) : req.isApproved ? (
+                              <Badge colorScheme="green">Approved</Badge>
+                            ) : (
+                              <Badge colorScheme="red">Rejected</Badge>
+                            )}
+                          </Td>
+                          <Td>
+                            {req.isPending && cert.issuer.toLowerCase() === address.toLowerCase() && (
+                              <Box>
+                                <Button
+                                  size="sm"
+                                  colorScheme="green"
+                                  mr={2}
+                                  onClick={() => handleApproveVerification(cert.id, req.requester)}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  colorScheme="red"
+                                  onClick={() => {
+                                    setSelectedCertificate(cert)
+                                    setRejectionReason('')
+                                    onOpen()
+                                  }}
+                                >
+                                  Reject
+                                </Button>
+                              </Box>
+                            )}
+                          </Td>
+                        </Tr>
+                      ))
+                    )}
+                  </Tbody>
+                </Table>
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
+        )}
       </VStack>
+
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            {selectedCertificate?.verificationRequests.some(req => req.isPending)
+              ? 'Reject Verification Request'
+              : 'Request Verification'}
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            {selectedCertificate?.verificationRequests.some(req => req.isPending) ? (
+              <FormControl>
+                <FormLabel>Rejection Reason</FormLabel>
+                <Textarea
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Enter reason for rejection"
+                />
+                <Button
+                  mt={4}
+                  colorScheme="red"
+                  onClick={() => {
+                    if (selectedCertificate) {
+                      const pendingRequest = selectedCertificate.verificationRequests.find(req => req.isPending)
+                      if (pendingRequest) {
+                        handleRejectVerification(selectedCertificate.id, pendingRequest.requester)
+                      }
+                    }
+                  }}
+                  isLoading={isLoading}
+                >
+                  Reject Request
+                </Button>
+              </FormControl>
+            ) : (
+              <FormControl>
+                <FormLabel>Verification Reason</FormLabel>
+                <Textarea
+                  value={verificationReason}
+                  onChange={(e) => setVerificationReason(e.target.value)}
+                  placeholder="Enter reason for verification request"
+                />
+                <Button
+                  mt={4}
+                  colorScheme="blue"
+                  onClick={() => {
+                    if (selectedCertificate) {
+                      handleVerificationRequest(selectedCertificate.id)
+                    }
+                  }}
+                  isLoading={isLoading}
+                >
+                  Submit Request
+                </Button>
+              </FormControl>
+            )}
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </Container>
   )
 } 

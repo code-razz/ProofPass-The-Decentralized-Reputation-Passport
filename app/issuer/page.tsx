@@ -17,6 +17,16 @@ import {
   AlertIcon,
   InputGroup,
   InputRightElement,
+  Tabs,
+  TabList,
+  TabPanels,
+  TabPanel,
+  Table,
+  Thead,
+  Tr,
+  Th,
+  Tbody,
+  Badge,
 } from '@chakra-ui/react'
 import { useWeb3Modal } from '../context/Web3ModalContext'
 import axios from 'axios'
@@ -38,6 +48,24 @@ console.log('Environment check:', {
   apiSecretLength: PINATA_API_SECRET?.length,
 })
 
+interface ActivityLog {
+  actor: string
+  target: string
+  action: string
+  details: string
+  timestamp: number
+}
+
+interface VerificationRequest {
+  requester: string
+  certificateId: number
+  reason: string
+  timestamp: number
+  isPending: boolean
+  isApproved: boolean
+  rejectionReason: string
+}
+
 export default function IssuerDashboard() {
   const { address, isConnected, provider } = useWeb3Modal()
   const toast = useToast()
@@ -53,6 +81,9 @@ export default function IssuerDashboard() {
     pdfFile: null as File | null,
   })
   const [pdfFileName, setPdfFileName] = useState('')
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
+  const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([])
+  const [selectedTab, setSelectedTab] = useState(0)
 
   useEffect(() => {
     // Check if Pinata credentials are configured
@@ -67,6 +98,8 @@ export default function IssuerDashboard() {
     if (isConnected && provider && CONTRACT_ADDRESS) {
       checkIssuerAuthorization()
       checkPendingRequest()
+      loadActivityLogs()
+      loadVerificationRequests()
     }
   }, [isConnected, provider])
 
@@ -386,6 +419,194 @@ export default function IssuerDashboard() {
     }
   }
 
+  const loadActivityLogs = async () => {
+    if (!provider || !address || !CONTRACT_ADDRESS) return
+
+    try {
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        SoulboundCertificate.abi,
+        provider
+      )
+
+      const totalSupply = await contract.totalSupply()
+      const logs: ActivityLog[] = []
+
+      for (let i = 1; i <= totalSupply; i++) {
+        try {
+          const issuer = await contract.getIssuer(i)
+          if (issuer.toLowerCase() === address.toLowerCase()) {
+            const requests = await contract.getCertificateVerificationRequests(i)
+            for (const request of requests) {
+              logs.push({
+                actor: request.requester,
+                target: address,
+                action: request.isPending ? 'VERIFICATION_REQUEST' :
+                       request.isApproved ? 'VERIFICATION_APPROVED' : 'VERIFICATION_REJECTED',
+                details: request.isApproved ? 'Certificate verification approved' :
+                       request.rejectionReason || request.reason,
+                timestamp: request.timestamp
+              })
+            }
+          }
+        } catch (error) {
+          console.error(`Error loading activity logs for certificate ${i}:`, error)
+        }
+      }
+
+      // Sort logs by timestamp in descending order
+      logs.sort((a, b) => b.timestamp - a.timestamp)
+      setActivityLogs(logs)
+    } catch (error) {
+      console.error('Error loading activity logs:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to load activity logs',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    }
+  }
+
+  const loadVerificationRequests = async () => {
+    if (!provider || !address || !CONTRACT_ADDRESS) return
+
+    try {
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        SoulboundCertificate.abi,
+        provider
+      )
+
+      const totalSupply = await contract.totalSupply()
+      const requests: VerificationRequest[] = []
+
+      for (let i = 1; i <= totalSupply; i++) {
+        try {
+          const issuer = await contract.getIssuer(i)
+          if (issuer.toLowerCase() === address.toLowerCase()) {
+            const certificateRequests = await contract.getCertificateVerificationRequests(i)
+            requests.push(...certificateRequests.map((req: any) => ({
+              ...req,
+              certificateId: i
+            })))
+          }
+        } catch (error) {
+          console.error(`Error loading verification requests for certificate ${i}:`, error)
+        }
+      }
+
+      // Sort requests by timestamp in descending order
+      requests.sort((a, b) => b.timestamp - a.timestamp)
+      setVerificationRequests(requests)
+    } catch (error) {
+      console.error('Error loading verification requests:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to load verification requests',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    }
+  }
+
+  const handleApproveVerification = async (certificateId: number, requester: string) => {
+    if (!provider || !address || !CONTRACT_ADDRESS) return
+
+    try {
+      setIsLoading(true)
+      const signer = await provider.getSigner()
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        SoulboundCertificate.abi,
+        signer
+      )
+
+      const tx = await contract.approveVerificationRequest(certificateId, requester)
+      await tx.wait()
+
+      toast({
+        title: 'Success',
+        description: 'Verification request approved',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+
+      loadVerificationRequests()
+      loadActivityLogs()
+    } catch (error: any) {
+      console.error('Error approving verification:', error)
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to approve verification',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleRejectVerification = async (certificateId: number, requester: string, reason: string) => {
+    if (!provider || !address || !CONTRACT_ADDRESS) return
+
+    try {
+      setIsLoading(true)
+      const signer = await provider.getSigner()
+      const contract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        SoulboundCertificate.abi,
+        signer
+      )
+
+      const tx = await contract.rejectVerificationRequest(certificateId, requester, reason)
+      await tx.wait()
+
+      toast({
+        title: 'Success',
+        description: 'Verification request rejected',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+
+      loadVerificationRequests()
+      loadActivityLogs()
+    } catch (error: any) {
+      console.error('Error rejecting verification:', error)
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to reject verification',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString()
+  }
+
+  const getActionColor = (action: string) => {
+    switch (action) {
+      case 'VERIFICATION_REQUEST':
+        return 'yellow'
+      case 'VERIFICATION_APPROVED':
+        return 'green'
+      case 'VERIFICATION_REJECTED':
+        return 'red'
+      default:
+        return 'gray'
+    }
+  }
+
   if (!isConnected) {
     return (
       <Container maxW="container.xl" py={10}>
@@ -445,101 +666,191 @@ export default function IssuerDashboard() {
   }
 
   return (
-    <Container maxW="container.xl" py={10}>
+    <Container maxW="container.xl" py={8}>
       <VStack spacing={8} align="stretch">
-        <Box>
-          <Heading mb={4}>Issue New Certificate</Heading>
-          <Text color="gray.600">
-            Connected as authorized issuer: {address?.slice(0, 6)}...{address?.slice(-4)}
-          </Text>
-          {!pinataConfigured && (
-            <Alert status="error" mt={4}>
-              <AlertIcon />
-              Pinata credentials not configured. Please check your environment variables.
-            </Alert>
-          )}
-        </Box>
+        <Heading>Issuer Dashboard</Heading>
 
-        <Box as="form" onSubmit={handleSubmit}>
-          <VStack spacing={4} align="stretch">
-            <FormControl isRequired>
-              <FormLabel>Recipient Address</FormLabel>
-              <Input
-                name="recipientAddress"
-                value={formData.recipientAddress}
-                onChange={handleInputChange}
-                placeholder="0x..."
-                isDisabled={!pinataConfigured}
-              />
-            </FormControl>
+        <Tabs onChange={(index) => setSelectedTab(index)}>
+          <TabList>
+            <Tab>Issue Certificate</Tab>
+            <Tab>Verification Requests</Tab>
+            <Tab>Activity Log</Tab>
+          </TabList>
 
-            <FormControl isRequired>
-              <FormLabel>Certificate Name</FormLabel>
-              <Input
-                name="certificateName"
-                value={formData.certificateName}
-                onChange={handleInputChange}
-                placeholder="e.g., Web3 Development Certificate"
-                isDisabled={!pinataConfigured}
-              />
-            </FormControl>
+          <TabPanels>
+            <TabPanel>
+              <Box as="form" onSubmit={handleSubmit}>
+                <VStack spacing={4} align="stretch">
+                  <FormControl isRequired>
+                    <FormLabel>Recipient Address</FormLabel>
+                    <Input
+                      name="recipientAddress"
+                      value={formData.recipientAddress}
+                      onChange={handleInputChange}
+                      placeholder="0x..."
+                      isDisabled={!pinataConfigured}
+                    />
+                  </FormControl>
 
-            <FormControl isRequired>
-              <FormLabel>Description</FormLabel>
-              <Textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                placeholder="Describe the certificate and its requirements..."
-                rows={4}
-                isDisabled={!pinataConfigured}
-              />
-            </FormControl>
+                  <FormControl isRequired>
+                    <FormLabel>Certificate Name</FormLabel>
+                    <Input
+                      name="certificateName"
+                      value={formData.certificateName}
+                      onChange={handleInputChange}
+                      placeholder="e.g., Web3 Development Certificate"
+                      isDisabled={!pinataConfigured}
+                    />
+                  </FormControl>
 
-            <FormControl isRequired>
-              <FormLabel>Certificate PDF</FormLabel>
-              <InputGroup>
-                <Input
-                  type="file"
-                  accept=".pdf"
-                  onChange={handleFileChange}
-                  display="none"
-                  id="pdf-upload"
-                  isDisabled={!pinataConfigured}
-                />
-                <Input
-                  value={pdfFileName}
-                  placeholder="Upload PDF certificate..."
-                  readOnly
-                  onClick={() => document.getElementById('pdf-upload')?.click()}
-                  cursor="pointer"
-                  isDisabled={!pinataConfigured}
-                />
-                <InputRightElement width="4.5rem">
+                  <FormControl isRequired>
+                    <FormLabel>Description</FormLabel>
+                    <Textarea
+                      name="description"
+                      value={formData.description}
+                      onChange={handleInputChange}
+                      placeholder="Describe the certificate and its requirements..."
+                      rows={4}
+                      isDisabled={!pinataConfigured}
+                    />
+                  </FormControl>
+
+                  <FormControl isRequired>
+                    <FormLabel>Certificate PDF</FormLabel>
+                    <InputGroup>
+                      <Input
+                        type="file"
+                        accept=".pdf"
+                        onChange={handleFileChange}
+                        display="none"
+                        id="pdf-upload"
+                        isDisabled={!pinataConfigured}
+                      />
+                      <Input
+                        value={pdfFileName}
+                        placeholder="Upload PDF certificate..."
+                        readOnly
+                        onClick={() => document.getElementById('pdf-upload')?.click()}
+                        cursor="pointer"
+                        isDisabled={!pinataConfigured}
+                      />
+                      <InputRightElement width="4.5rem">
+                        <Button
+                          h="1.75rem"
+                          size="sm"
+                          onClick={() => document.getElementById('pdf-upload')?.click()}
+                          isDisabled={!pinataConfigured}
+                        >
+                          Browse
+                        </Button>
+                      </InputRightElement>
+                    </InputGroup>
+                  </FormControl>
+
                   <Button
-                    h="1.75rem"
-                    size="sm"
-                    onClick={() => document.getElementById('pdf-upload')?.click()}
-                    isDisabled={!pinataConfigured}
+                    type="submit"
+                    colorScheme="blue"
+                    size="lg"
+                    isLoading={isLoading}
+                    loadingText="Issuing Certificate..."
+                    isDisabled={!pinataConfigured || !formData.pdfFile}
                   >
-                    Browse
+                    Issue Certificate
                   </Button>
-                </InputRightElement>
-              </InputGroup>
-            </FormControl>
+                </VStack>
+              </Box>
+            </TabPanel>
 
-            <Button
-              type="submit"
-              colorScheme="blue"
-              size="lg"
-              isLoading={isLoading}
-              loadingText="Issuing Certificate..."
-              isDisabled={!pinataConfigured || !formData.pdfFile}
-            >
-              Issue Certificate
-            </Button>
-          </VStack>
-        </Box>
+            <TabPanel>
+              <Table variant="simple">
+                <Thead>
+                  <Tr>
+                    <Th>Certificate ID</Th>
+                    <Th>Requester</Th>
+                    <Th>Reason</Th>
+                    <Th>Date</Th>
+                    <Th>Status</Th>
+                    <Th>Actions</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {verificationRequests.map((request, index) => (
+                    <Tr key={`${request.certificateId}-${index}`}>
+                      <Td>{request.certificateId}</Td>
+                      <Td>{request.requester}</Td>
+                      <Td>{request.reason}</Td>
+                      <Td>{formatDate(request.timestamp)}</Td>
+                      <Td>
+                        {request.isPending ? (
+                          <Badge colorScheme="yellow">Pending</Badge>
+                        ) : request.isApproved ? (
+                          <Badge colorScheme="green">Approved</Badge>
+                        ) : (
+                          <Badge colorScheme="red">Rejected</Badge>
+                        )}
+                      </Td>
+                      <Td>
+                        {request.isPending && (
+                          <Box>
+                            <Button
+                              size="sm"
+                              colorScheme="green"
+                              mr={2}
+                              onClick={() => handleApproveVerification(request.certificateId, request.requester)}
+                              isLoading={isLoading}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              colorScheme="red"
+                              onClick={() => {
+                                const reason = prompt('Enter rejection reason:')
+                                if (reason) {
+                                  handleRejectVerification(request.certificateId, request.requester, reason)
+                                }
+                              }}
+                              isLoading={isLoading}
+                            >
+                              Reject
+                            </Button>
+                          </Box>
+                        )}
+                      </Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            </TabPanel>
+
+            <TabPanel>
+              <Table variant="simple">
+                <Thead>
+                  <Tr>
+                    <Th>Date</Th>
+                    <Th>Action</Th>
+                    <Th>User</Th>
+                    <Th>Details</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {activityLogs.map((log, index) => (
+                    <Tr key={index}>
+                      <Td>{formatDate(log.timestamp)}</Td>
+                      <Td>
+                        <Badge colorScheme={getActionColor(log.action)}>
+                          {log.action.replace('_', ' ')}
+                        </Badge>
+                      </Td>
+                      <Td>{log.actor}</Td>
+                      <Td>{log.details}</Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
       </VStack>
     </Container>
   )
