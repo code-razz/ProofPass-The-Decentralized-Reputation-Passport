@@ -1,12 +1,13 @@
 import { Providers } from './providers'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import Navigation from './components/Navigation'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'Soulbound Certificate System',
-  description: 'Issue and manage certificates as Soulbound Tokens',
+  title: 'ProofPass - Decentralized Reputation Passport',
+  description: 'Issue, verify, and share certificates as Soulbound Tokens',
 }
 
 export default function RootLayout({
@@ -18,7 +19,10 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <Providers>
-          {children}
+          <Navigation />
+          <main>
+            {children}
+          </main>
         </Providers>
       </body>
     </html>

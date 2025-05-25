@@ -15,22 +15,7 @@ contract SoulboundCertificate is ERC721, ERC721Enumerable, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
-    // Mapping from token ID to IPFS hash of metadata
-    mapping(uint256 => string) private _tokenURIs;
-    
-    // Mapping from token ID to issuer address
-    mapping(uint256 => address) private _issuers;
-    
-    // Mapping from token ID to issue date
-    mapping(uint256 => uint256) private _issueDates;
-
-    // Mapping for GitHub usernames
-    mapping(address => string) private _githubUsernames;
-
-    // Mapping of authorized issuers
-    mapping(address => bool) public authorizedIssuers;
-
-    // Issuer request system
+    // Struct definitions
     struct IssuerRequest {
         address requester;
         string reason;
@@ -38,10 +23,6 @@ contract SoulboundCertificate is ERC721, ERC721Enumerable, Ownable {
         bool isPending;
     }
 
-    mapping(address => IssuerRequest) public issuerRequests;
-    address[] public pendingRequesters;
-
-    // Activity log entry
     struct ActivityLog {
         address actor;
         address target;
@@ -50,8 +31,60 @@ contract SoulboundCertificate is ERC721, ERC721Enumerable, Ownable {
         uint256 timestamp;
     }
 
-    // Array to store activity logs
+    struct OpportunityProvider {
+        string name;
+        string description;
+        string website;
+        string providerType;
+        uint256 registeredAt;
+    }
+
+    struct Opportunity {
+        uint256 id;
+        address employer;
+        string title;
+        string description;
+        string requirements;
+        uint256 postedAt;
+        bool isActive;
+    }
+
+    struct VerificationRequest {
+        address employer;
+        address user;
+        uint256[] certificateIds;
+        string purpose;
+        uint256 requestedAt;
+        bool isApproved;
+        bool isRejected;
+    }
+
+    struct Endorsement {
+        address endorser;
+        string skill;
+        string comment;
+        uint256 timestamp;
+    }
+
+    // State variables
+    mapping(uint256 => string) private _tokenURIs;
+    mapping(uint256 => address) private _issuers;
+    mapping(uint256 => uint256) private _issueDates;
+    mapping(address => string) private _githubUsernames;
+    mapping(address => bool) public authorizedIssuers;
+    mapping(address => IssuerRequest) public issuerRequests;
+    mapping(address => OpportunityProvider) public opportunityProviders;
+    mapping(address => bool) public isOpportunityProvider;
+    mapping(uint256 => Opportunity) public opportunities;
+    mapping(address => uint256[]) public providerOpportunities;
+    mapping(address => VerificationRequest[]) public verificationRequests;
+    mapping(address => Endorsement[]) public endorsements;
+    mapping(address => mapping(address => bool)) public sharedCertificates;
+
+    address[] public pendingRequesters;
     ActivityLog[] private activityLogs;
+    Counters.Counter private _opportunityIds;
+    Counters.Counter private _verificationRequestIds;
 
     // Events with timestamps
     event CertificateIssued(
@@ -89,6 +122,36 @@ contract SoulboundCertificate is ERC721, ERC721Enumerable, Ownable {
         address indexed requester,
         address indexed rejector,
         uint256 timestamp
+    );
+
+    // Events
+    event ProviderRegistered(address indexed provider, string name, string providerType);
+    event OpportunityPosted(uint256 indexed opportunityId, address indexed provider);
+    event OpportunityClosed(uint256 indexed opportunityId, address indexed provider);
+    event VerificationRequested(
+        address indexed employer,
+        address indexed user,
+        uint256[] certificateIds
+    );
+    event VerificationApproved(
+        address indexed employer,
+        address indexed user,
+        uint256[] certificateIds
+    );
+    event VerificationRejected(
+        address indexed employer,
+        address indexed user,
+        uint256[] certificateIds
+    );
+    event CertificateShared(
+        address indexed owner,
+        address indexed recipient,
+        uint256[] certificateIds
+    );
+    event EndorsementAdded(
+        address indexed user,
+        address indexed endorser,
+        string skill
     );
 
     constructor() ERC721("Soulbound Certificate", "SBC") Ownable() {}
@@ -363,5 +426,219 @@ contract SoulboundCertificate is ERC721, ERC721Enumerable, Ownable {
 
     function getActivityLogsCount() external view returns (uint256) {
         return activityLogs.length;
+    }
+
+    function registerAsProvider(
+        string memory name,
+        string memory description,
+        string memory website,
+        string memory providerType
+    ) external {
+        require(!isOpportunityProvider[msg.sender], "Already registered as provider");
+        require(bytes(name).length > 0, "Name cannot be empty");
+        require(bytes(providerType).length > 0, "Provider type cannot be empty");
+
+        opportunityProviders[msg.sender] = OpportunityProvider({
+            name: name,
+            description: description,
+            website: website,
+            providerType: providerType,
+            registeredAt: block.timestamp
+        });
+        isOpportunityProvider[msg.sender] = true;
+
+        emit ProviderRegistered(msg.sender, name, providerType);
+    }
+
+    function isProvider(address provider) public view returns (bool) {
+        return isOpportunityProvider[provider];
+    }
+
+    function getProviderDetails(address provider) public view returns (
+        string memory name,
+        string memory description,
+        string memory website,
+        string memory providerType,
+        uint256 registeredAt
+    ) {
+        require(isOpportunityProvider[provider], "Not a registered provider");
+        OpportunityProvider memory providerDetails = opportunityProviders[provider];
+        return (
+            providerDetails.name,
+            providerDetails.description,
+            providerDetails.website,
+            providerDetails.providerType,
+            providerDetails.registeredAt
+        );
+    }
+
+    modifier onlyProvider() {
+        require(isOpportunityProvider[msg.sender], "Not a registered provider");
+        _;
+    }
+
+    // Post opportunity
+    function postOpportunity(
+        string memory title,
+        string memory description,
+        string memory requirements
+    ) external onlyProvider {
+        _opportunityIds.increment();
+        uint256 opportunityId = _opportunityIds.current();
+
+        opportunities[opportunityId] = Opportunity({
+            id: opportunityId,
+            employer: msg.sender,
+            title: title,
+            description: description,
+            requirements: requirements,
+            postedAt: block.timestamp,
+            isActive: true
+        });
+
+        providerOpportunities[msg.sender].push(opportunityId);
+        emit OpportunityPosted(opportunityId, msg.sender);
+    }
+
+    // Close opportunity
+    function closeOpportunity(uint256 opportunityId) external {
+        require(opportunities[opportunityId].employer == msg.sender, "Not the opportunity owner");
+        require(opportunities[opportunityId].isActive, "Opportunity already closed");
+
+        opportunities[opportunityId].isActive = false;
+        emit OpportunityClosed(opportunityId, msg.sender);
+    }
+
+    // Request certificate verification
+    function requestVerification(
+        address employer,
+        uint256[] memory certificateIds,
+        string memory purpose
+    ) external {
+        require(isOpportunityProvider[employer], "Not a registered provider");
+
+        // Verify ownership of certificates
+        for (uint i = 0; i < certificateIds.length; i++) {
+            require(ownerOf(certificateIds[i]) == msg.sender, "Not the certificate owner");
+        }
+
+        VerificationRequest memory request = VerificationRequest({
+            employer: employer,
+            user: msg.sender,
+            certificateIds: certificateIds,
+            purpose: purpose,
+            requestedAt: block.timestamp,
+            isApproved: false,
+            isRejected: false
+        });
+
+        verificationRequests[employer].push(request);
+        emit VerificationRequested(employer, msg.sender, certificateIds);
+    }
+
+    // Approve verification request
+    function approveVerification(
+        address user,
+        uint256 requestIndex
+    ) external {
+        require(isOpportunityProvider[msg.sender], "Not a registered provider");
+        require(verificationRequests[msg.sender][requestIndex].user == user, "Invalid request");
+        require(!verificationRequests[msg.sender][requestIndex].isApproved, "Already approved");
+        require(!verificationRequests[msg.sender][requestIndex].isRejected, "Already rejected");
+
+        VerificationRequest storage request = verificationRequests[msg.sender][requestIndex];
+        request.isApproved = true;
+
+        // Share certificates with employer
+        for (uint i = 0; i < request.certificateIds.length; i++) {
+            sharedCertificates[user][msg.sender] = true;
+        }
+
+        emit VerificationApproved(msg.sender, user, request.certificateIds);
+    }
+
+    // Reject verification request
+    function rejectVerification(
+        address user,
+        uint256 requestIndex
+    ) external {
+        require(isOpportunityProvider[msg.sender], "Not a registered provider");
+        require(verificationRequests[msg.sender][requestIndex].user == user, "Invalid request");
+        require(!verificationRequests[msg.sender][requestIndex].isApproved, "Already approved");
+        require(!verificationRequests[msg.sender][requestIndex].isRejected, "Already rejected");
+
+        VerificationRequest storage request = verificationRequests[msg.sender][requestIndex];
+        request.isRejected = true;
+
+        emit VerificationRejected(msg.sender, user, request.certificateIds);
+    }
+
+    // Add endorsement
+    function addEndorsement(
+        address user,
+        string memory skill,
+        string memory comment
+    ) external {
+        require(isOpportunityProvider[msg.sender], "Not a registered provider");
+        require(sharedCertificates[user][msg.sender], "No shared certificates");
+
+        endorsements[user].push(Endorsement({
+            endorser: msg.sender,
+            skill: skill,
+            comment: comment,
+            timestamp: block.timestamp
+        }));
+
+        emit EndorsementAdded(user, msg.sender, skill);
+    }
+
+    // Get provider opportunities
+    function getProviderOpportunities(address provider) external view returns (uint256[] memory) {
+        return providerOpportunities[provider];
+    }
+
+    // Get opportunity details
+    function getOpportunityDetails(uint256 opportunityId) external view returns (
+        address employer,
+        string memory title,
+        string memory description,
+        string memory requirements,
+        uint256 postedAt,
+        bool isActive
+    ) {
+        Opportunity storage opp = opportunities[opportunityId];
+        return (
+            opp.employer,
+            opp.title,
+            opp.description,
+            opp.requirements,
+            opp.postedAt,
+            opp.isActive
+        );
+    }
+
+    // Get user endorsements
+    function getUserEndorsements(address user) external view returns (
+        address[] memory endorsers,
+        string[] memory skills,
+        string[] memory comments,
+        uint256[] memory timestamps
+    ) {
+        Endorsement[] storage userEndorsements = endorsements[user];
+        uint256 length = userEndorsements.length;
+        
+        endorsers = new address[](length);
+        skills = new string[](length);
+        comments = new string[](length);
+        timestamps = new uint256[](length);
+
+        for (uint i = 0; i < length; i++) {
+            endorsers[i] = userEndorsements[i].endorser;
+            skills[i] = userEndorsements[i].skill;
+            comments[i] = userEndorsements[i].comment;
+            timestamps[i] = userEndorsements[i].timestamp;
+        }
+
+        return (endorsers, skills, comments, timestamps);
     }
 } 

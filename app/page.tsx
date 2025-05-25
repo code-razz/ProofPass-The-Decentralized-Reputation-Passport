@@ -1,173 +1,148 @@
 'use client'
 
-import { Box, Container, Heading, VStack, Button, Text, useToast, Alert, AlertIcon } from '@chakra-ui/react'
+import { Box, Button, Container, Heading, SimpleGrid, Text, VStack } from '@chakra-ui/react'
 import { useWeb3Modal } from './context/Web3ModalContext'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
-import { ethers } from 'ethers'
-import SoulboundCertificate from '../artifacts/contracts/SoulboundCertificate.sol/SoulboundCertificate.json'
-
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
 
 export default function Home() {
-  const { address, isConnected, connect, disconnect, provider } = useWeb3Modal()
-  const toast = useToast()
-  const [contractOwner, setContractOwner] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-
-  useEffect(() => {
-    if (isConnected && provider && CONTRACT_ADDRESS) {
-      fetchContractOwner()
-    }
-  }, [isConnected, provider])
-
-  const fetchContractOwner = async () => {
-    if (!provider || !CONTRACT_ADDRESS) {
-      console.log('Provider or contract address not available', {
-        hasProvider: !!provider,
-        contractAddress: CONTRACT_ADDRESS
-      })
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      console.log('Fetching contract owner...')
-      console.log('Contract Address:', CONTRACT_ADDRESS)
-      console.log('Provider Network:', (await provider.getNetwork()).chainId)
-      
-      const contract = new ethers.Contract(
-        CONTRACT_ADDRESS,
-        SoulboundCertificate.abi,
-        provider
-      )
-      
-      // Verify contract is deployed
-      const code = await provider.getCode(CONTRACT_ADDRESS)
-      console.log('Contract Code Length:', code.length)
-      if (code === '0x') {
-        throw new Error('No contract deployed at this address')
-      }
-
-      // Try to get owner
-      console.log('Attempting to call owner()...')
-      const owner = await contract.owner()
-      console.log('Contract Owner:', owner)
-      console.log('Connected Address:', address)
-      console.log('Is Connected Address Owner:', address?.toLowerCase() === owner.toLowerCase())
-      
-      setContractOwner(owner)
-    } catch (error) {
-      console.error('Error fetching contract owner:', error)
-      console.error('Detailed error information:', {
-        provider: !!provider,
-        contractAddress: CONTRACT_ADDRESS,
-        errorName: error instanceof Error ? error.name : 'Unknown',
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        errorStack: error instanceof Error ? error.stack : undefined,
-        contractABI: SoulboundCertificate.abi ? 'Available' : 'Missing'
-      })
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to fetch contract owner',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleConnect = async () => {
-    try {
-      await connect()
-      toast({
-        title: 'Connected',
-        description: 'Wallet connected successfully',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      })
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to connect wallet',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      })
-    }
-  }
+  const { isConnected, connect } = useWeb3Modal()
 
   return (
-    <Container maxW="container.xl" py={10}>
-      <VStack spacing={8} align="stretch">
-        <Box textAlign="center">
-          <Heading as="h1" size="2xl" mb={4}>
-            Soulbound Certificate System
+    <Container maxW="container.xl" py={12}>
+      <VStack spacing={12}>
+        <Box textAlign="center" maxW="3xl">
+          <Heading
+            as="h1"
+            size="2xl"
+            bgGradient="linear(to-r, blue.400, purple.500)"
+            bgClip="text"
+            mb={6}
+          >
+            ProofPass - Your Decentralized Reputation Passport
           </Heading>
-          <Text fontSize="xl" color="gray.600">
-            Issue and manage certificates as non-transferable tokens
+          <Text fontSize="xl" color="gray.600" mb={8}>
+            A secure and verifiable way to manage your professional credentials, 
+            share your achievements, and connect with opportunities.
           </Text>
-        </Box>
-
-        {isConnected && contractOwner && (
-          <Alert status="info" variant="subtle">
-            <AlertIcon />
-            <Box>
-              <Text fontWeight="bold">Contract Owner:</Text>
-              <Text>{contractOwner}</Text>
-              {address?.toLowerCase() === contractOwner.toLowerCase() && (
-                <Text mt={2} color="green.500">
-                  You are the contract owner! You can access the admin dashboard to manage issuers.
-                </Text>
-              )}
-            </Box>
-          </Alert>
-        )}
-
-        <Box textAlign="center">
-          {!isConnected ? (
+          {!isConnected && (
             <Button
               colorScheme="blue"
               size="lg"
-              onClick={handleConnect}
+              onClick={connect}
             >
-              Connect Wallet
+              Connect Wallet to Get Started
             </Button>
-          ) : (
-            <VStack spacing={4}>
-              <Text>
-                Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
-              </Text>
-              <Button
-                colorScheme="red"
-                variant="outline"
-                onClick={disconnect}
-              >
-                Disconnect
-              </Button>
-              <Box>
-                <Link href="/issuer" passHref>
-                  <Button colorScheme="green" mr={4}>
-                    Issuer Dashboard
-                  </Button>
-                </Link>
-                <Link href="/certificates" passHref>
-                  <Button colorScheme="purple" mr={4}>
-                    My Certificates
-                  </Button>
-                </Link>
-                <Link href="/admin" passHref>
-                  <Button colorScheme="orange">
-                    Admin Dashboard
-                  </Button>
-                </Link>
-              </Box>
-            </VStack>
           )}
         </Box>
+
+        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={8} w="full">
+          <Box
+            p={6}
+            bg="white"
+            borderRadius="lg"
+            boxShadow="md"
+            _hover={{ transform: 'translateY(-4px)', transition: 'all 0.2s' }}
+          >
+            <VStack align="start" spacing={4}>
+              <Heading size="md">Certificates</Heading>
+              <Text color="gray.600">
+                Receive and manage your professional certificates as soulbound tokens.
+                Each certificate is permanently linked to your wallet and verifiable on-chain.
+              </Text>
+              <Link href="/certificates" passHref>
+                <Button colorScheme="blue" variant="outline" size="sm">
+                  View Certificates
+                </Button>
+              </Link>
+            </VStack>
+          </Box>
+
+          <Box
+            p={6}
+            bg="white"
+            borderRadius="lg"
+            boxShadow="md"
+            _hover={{ transform: 'translateY(-4px)', transition: 'all 0.2s' }}
+          >
+            <VStack align="start" spacing={4}>
+              <Heading size="md">Reputation Passport</Heading>
+              <Text color="gray.600">
+                Create your professional reputation passport by combining certificates
+                and endorsements. Share your achievements with employers securely.
+              </Text>
+              <Link href="/passport" passHref>
+                <Button colorScheme="blue" variant="outline" size="sm">
+                  View Passport
+                </Button>
+              </Link>
+            </VStack>
+          </Box>
+
+          <Box
+            p={6}
+            bg="white"
+            borderRadius="lg"
+            boxShadow="md"
+            _hover={{ transform: 'translateY(-4px)', transition: 'all 0.2s' }}
+          >
+            <VStack align="start" spacing={4}>
+              <Heading size="md">For Employers</Heading>
+              <Text color="gray.600">
+                Verify candidate credentials, post opportunities, and endorse skills.
+                Build trust through blockchain-verified professional achievements.
+              </Text>
+              <Link href="/employer" passHref>
+                <Button colorScheme="blue" variant="outline" size="sm">
+                  Employer Portal
+                </Button>
+              </Link>
+            </VStack>
+          </Box>
+        </SimpleGrid>
+
+        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8} w="full">
+          <Box
+            p={6}
+            bg="white"
+            borderRadius="lg"
+            boxShadow="md"
+            _hover={{ transform: 'translateY(-4px)', transition: 'all 0.2s' }}
+          >
+            <VStack align="start" spacing={4}>
+              <Heading size="md">Certificate Verification</Heading>
+              <Text color="gray.600">
+                Request verification of your certificates from trusted employers.
+                Each verification is recorded on-chain for transparency.
+              </Text>
+              <Link href="/verify" passHref>
+                <Button colorScheme="blue" variant="outline" size="sm">
+                  Request Verification
+                </Button>
+              </Link>
+            </VStack>
+          </Box>
+
+          <Box
+            p={6}
+            bg="white"
+            borderRadius="lg"
+            boxShadow="md"
+            _hover={{ transform: 'translateY(-4px)', transition: 'all 0.2s' }}
+          >
+            <VStack align="start" spacing={4}>
+              <Heading size="md">For Issuers</Heading>
+              <Text color="gray.600">
+                Issue verifiable certificates to your students or employees.
+                Join our network of trusted certificate issuers.
+              </Text>
+              <Link href="/issuer" passHref>
+                <Button colorScheme="blue" variant="outline" size="sm">
+                  Become an Issuer
+                </Button>
+              </Link>
+            </VStack>
+          </Box>
+        </SimpleGrid>
       </VStack>
     </Container>
   )
