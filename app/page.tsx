@@ -1,83 +1,70 @@
 'use client'
 
-import { Box, Container, Heading, VStack, Button, Text, useToast, Alert, AlertIcon } from '@chakra-ui/react'
+import {
+  Box,
+  Container,
+  Heading,
+  Text,
+  Button,
+  VStack,
+  HStack,
+  SimpleGrid,
+  Card,
+  CardHeader,
+  CardBody,
+  CardFooter,
+  useToast,
+  Icon,
+  Flex,
+  Badge,
+  Skeleton,
+} from '@chakra-ui/react'
 import { useWeb3Modal } from './context/Web3ModalContext'
+import { FaCertificate, FaShieldAlt, FaBriefcase, FaUserCheck } from 'react-icons/fa'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
-import { ethers } from 'ethers'
-import SoulboundCertificate from '../artifacts/contracts/SoulboundCertificate.sol/SoulboundCertificate.json'
+import { useEffect, useState } from 'react'
 
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
+const features = [
+  {
+    title: 'Soulbound Certificates',
+    description: 'Manage non-transferable certificates that prove your achievements and skills.',
+    icon: FaCertificate,
+    link: '/certificates',
+    badge: 'For Everyone',
+  },
+  {
+    title: 'Opportunities',
+    description: 'Discover and apply for opportunities posted by verified providers.',
+    icon: FaBriefcase,
+    link: '/opportunities',
+    badge: 'For Everyone',
+  },
+  {
+    title: 'Issuer Portal',
+    description: 'Become an issuer to create and manage certificates for your organization.',
+    icon: FaUserCheck,
+    link: '/issuer',
+    badge: 'For Organizations',
+  },
+  {
+    title: 'Admin Dashboard',
+    description: 'Manage issuers and oversee the platform\'s operations.',
+    icon: FaShieldAlt,
+    link: '/admin',
+    badge: 'For Admins',
+  },
+]
 
 export default function Home() {
-  const { address, isConnected, connect, disconnect, provider } = useWeb3Modal()
+  const { isConnected, connect } = useWeb3Modal()
   const toast = useToast()
-  const [contractOwner, setContractOwner] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    if (isConnected && provider && CONTRACT_ADDRESS) {
-      fetchContractOwner()
-    }
-  }, [isConnected, provider])
-
-  const fetchContractOwner = async () => {
-    if (!provider || !CONTRACT_ADDRESS) {
-      console.log('Provider or contract address not available', {
-        hasProvider: !!provider,
-        contractAddress: CONTRACT_ADDRESS
-      })
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      console.log('Fetching contract owner...')
-      console.log('Contract Address:', CONTRACT_ADDRESS)
-      console.log('Provider Network:', (await provider.getNetwork()).chainId)
-      
-      const contract = new ethers.Contract(
-        CONTRACT_ADDRESS,
-        SoulboundCertificate.abi,
-        provider
-      )
-      
-      // Verify contract is deployed
-      const code = await provider.getCode(CONTRACT_ADDRESS)
-      console.log('Contract Code Length:', code.length)
-      if (code === '0x') {
-        throw new Error('No contract deployed at this address')
-      }
-
-      // Try to get owner
-      console.log('Attempting to call owner()...')
-      const owner = await contract.owner()
-      console.log('Contract Owner:', owner)
-      console.log('Connected Address:', address)
-      console.log('Is Connected Address Owner:', address?.toLowerCase() === owner.toLowerCase())
-      
-      setContractOwner(owner)
-    } catch (error) {
-      console.error('Error fetching contract owner:', error)
-      console.error('Detailed error information:', {
-        provider: !!provider,
-        contractAddress: CONTRACT_ADDRESS,
-        errorName: error instanceof Error ? error.name : 'Unknown',
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        errorStack: error instanceof Error ? error.stack : undefined,
-        contractABI: SoulboundCertificate.abi ? 'Available' : 'Missing'
-      })
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to fetch contract owner',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      })
-    } finally {
+    setMounted(true)
       setIsLoading(false)
-    }
-  }
+  }, [])
 
   const handleConnect = async () => {
     try {
@@ -100,73 +87,144 @@ export default function Home() {
     }
   }
 
+  // Don't render anything until mounted to prevent hydration mismatch
+  if (!mounted) {
+    return null
+  }
+
   return (
     <Container maxW="container.xl" py={10}>
-      <VStack spacing={8} align="stretch">
-        <Box textAlign="center">
-          <Heading as="h1" size="2xl" mb={4}>
-            Soulbound Certificate System
+      <VStack spacing={12} align="stretch">
+        {/* Hero Section */}
+        <Box textAlign="center" py={10}>
+          <Heading
+            as="h1"
+            size="2xl"
+            bgGradient="linear(to-r, blue.400, blue.600)"
+            bgClip="text"
+            mb={4}
+          >
+            ProofPass
           </Heading>
-          <Text fontSize="xl" color="gray.600">
-            Issue and manage certificates as non-transferable tokens
+          <Text fontSize="xl" color="gray.600" mb={8}>
+            The Decentralized Reputation Passport
           </Text>
+          <Skeleton isLoaded={!isLoading}>
+            {!isConnected && (
+              <Button
+                size="lg"
+                colorScheme="blue"
+                onClick={handleConnect}
+                leftIcon={<Icon as={FaCertificate} />}
+              >
+                Connect Wallet to Get Started
+              </Button>
+            )}
+          </Skeleton>
         </Box>
 
-        {isConnected && contractOwner && (
-          <Alert status="info" variant="subtle">
-            <AlertIcon />
-            <Box>
-              <Text fontWeight="bold">Contract Owner:</Text>
-              <Text>{contractOwner}</Text>
-              {address?.toLowerCase() === contractOwner.toLowerCase() && (
-                <Text mt={2} color="green.500">
-                  You are the contract owner! You can access the admin dashboard to manage issuers.
-                </Text>
-              )}
-            </Box>
-          </Alert>
-        )}
-
-        <Box textAlign="center">
-          {!isConnected ? (
-            <Button
-              colorScheme="blue"
-              size="lg"
-              onClick={handleConnect}
-            >
-              Connect Wallet
-            </Button>
-          ) : (
-            <VStack spacing={4}>
-              <Text>
-                Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
-              </Text>
-              <Button
-                colorScheme="red"
-                variant="outline"
-                onClick={disconnect}
-              >
-                Disconnect
-              </Button>
+        {/* Features Grid */}
               <Box>
-                <Link href="/issuer" passHref>
-                  <Button colorScheme="green" mr={4}>
-                    Issuer Dashboard
+          <Heading mb={8} textAlign="center">
+            Platform Features
+          </Heading>
+          <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={8}>
+            {features.map((feature, index) => (
+              <Box key={index}>
+                <Link href={feature.link} passHref legacyBehavior>
+                  <Card
+                    as="a"
+                    _hover={{
+                      transform: 'translateY(-4px)',
+                      shadow: 'lg',
+                      transition: 'all 0.2s',
+                    }}
+                    cursor="pointer"
+                  >
+                    <CardHeader>
+                      <Flex justify="space-between" align="center">
+                        <Icon as={feature.icon} boxSize={8} color="blue.500" />
+                        <Badge colorScheme={
+                          feature.badge === 'For Everyone' ? 'green' :
+                          feature.badge === 'For Organizations' ? 'blue' :
+                          'purple'
+                        }>
+                          {feature.badge}
+                        </Badge>
+                      </Flex>
+                    </CardHeader>
+                    <CardBody>
+                      <Heading size="md" mb={2}>
+                        {feature.title}
+                      </Heading>
+                      <Text color="gray.600">{feature.description}</Text>
+                    </CardBody>
+                    <CardFooter>
+                      <Button
+                        variant="ghost"
+                        colorScheme="blue"
+                        size="sm"
+                        width="full"
+                      >
+                        Learn More
                   </Button>
-                </Link>
-                <Link href="/certificates" passHref>
-                  <Button colorScheme="purple" mr={4}>
-                    My Certificates
-                  </Button>
-                </Link>
-                <Link href="/admin" passHref>
-                  <Button colorScheme="orange">
-                    Admin Dashboard
-                  </Button>
+                    </CardFooter>
+                  </Card>
                 </Link>
               </Box>
+            ))}
+          </SimpleGrid>
+        </Box>
+
+        {/* How It Works Section */}
+        <Box textAlign="center" py={10}>
+          <Heading mb={8}>How It Works</Heading>
+          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={8}>
+            <VStack spacing={4}>
+              <Icon as={FaCertificate} boxSize={12} color="blue.500" />
+              <Heading size="md">Get Certified</Heading>
+              <Text color="gray.600">
+                Receive verifiable certificates from authorized issuers for your achievements
+              </Text>
             </VStack>
-          )}
+            <VStack spacing={4}>
+              <Icon as={FaBriefcase} boxSize={12} color="blue.500" />
+              <Heading size="md">Find Opportunities</Heading>
+              <Text color="gray.600">
+                Browse and apply for opportunities using your verified credentials
+              </Text>
+            </VStack>
+            <VStack spacing={4}>
+              <Icon as={FaUserCheck} boxSize={12} color="blue.500" />
+              <Heading size="md">Build Reputation</Heading>
+              <Text color="gray.600">
+                Create a trusted digital identity through verified achievements
+              </Text>
+            </VStack>
+          </SimpleGrid>
+        </Box>
+
+        {/* Call to Action */}
+        <Box textAlign="center" py={10} bg="blue.50" borderRadius="lg">
+          <VStack spacing={6}>
+            <Heading>Ready to Get Started?</Heading>
+            <Text color="gray.600" maxW="2xl">
+              Join ProofPass today to start building your decentralized reputation passport.
+              Connect your wallet to access all features.
+            </Text>
+            <Skeleton isLoaded={!isLoading}>
+              {!isConnected && (
+                <Button
+                  size="lg"
+                  colorScheme="blue"
+                  onClick={handleConnect}
+                  leftIcon={<Icon as={FaCertificate} />}
+                >
+                  Connect Wallet
+                </Button>
+              )}
+            </Skeleton>
+          </VStack>
         </Box>
       </VStack>
     </Container>

@@ -1,13 +1,10 @@
-import { Providers } from './providers'
-import { Inter } from 'next/font/google'
+'use client'
+
+import { ChakraProvider } from '@chakra-ui/react'
+import { Web3ModalProvider } from './context/Web3ModalContext'
+import { OpportunityProvider } from './context/OpportunityContext'
+import Navbar from './components/Navbar'
 import './globals.css'
-
-const inter = Inter({ subsets: ['latin'] })
-
-export const metadata = {
-  title: 'Soulbound Certificate System',
-  description: 'Issue and manage certificates as Soulbound Tokens',
-}
 
 export default function RootLayout({
   children,
@@ -16,10 +13,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <Providers>
-          {children}
-        </Providers>
+      <body>
+        <ChakraProvider>
+          <Web3ModalProvider>
+            <OpportunityProvider>
+              <Navbar />
+              {children}
+            </OpportunityProvider>
+          </Web3ModalProvider>
+        </ChakraProvider>
       </body>
     </html>
   )
