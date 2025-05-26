@@ -52,6 +52,7 @@ export default function ApplicationsPage() {
     error,
     refreshOpportunities,
     refreshApplications,
+    toggleOpportunityStatus,
   } = useOpportunity()
   const { isConnected, connect, provider } = useWeb3Modal()
   const toast = useToast()
@@ -165,6 +166,28 @@ export default function ApplicationsPage() {
   const getOpportunityTitle = (opportunityId: number) => {
     const opportunity = opportunities.find(opp => opp.id === opportunityId)
     return opportunity ? opportunity.title : 'Unknown Opportunity'
+  }
+
+  // Add handleStatusUpdate function for opportunities
+  const handleOpportunityStatusToggle = async (opportunityId: number) => {
+    try {
+      await toggleOpportunityStatus(opportunityId)
+      toast({
+        title: 'Success',
+        description: 'Opportunity status updated successfully',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update opportunity status',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    }
   }
 
   if (!isConnected) {
@@ -296,7 +319,17 @@ export default function ApplicationsPage() {
                   <Card key={opportunity.id}>
                     <CardHeader>
                       <VStack align="start" spacing={2}>
-                        <Heading size="md">{opportunity.title}</Heading>
+                        <HStack justify="space-between" width="full">
+                          <Heading size="md">{opportunity.title}</Heading>
+                          <Button
+                            size="sm"
+                            colorScheme={opportunity.isActive ? 'red' : 'green'}
+                            onClick={() => handleOpportunityStatusToggle(opportunity.id)}
+                            isLoading={isLoading}
+                          >
+                            {opportunity.isActive ? 'Close Applications' : 'Reopen Applications'}
+                          </Button>
+                        </HStack>
                         <HStack>
                           <Badge colorScheme={opportunity.isActive ? 'green' : 'red'}>
                             {opportunity.isActive ? 'Active' : 'Closed'}
