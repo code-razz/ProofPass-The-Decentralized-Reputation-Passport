@@ -1,111 +1,138 @@
-# Soulbound Certificate System
+# ProofPass: The Decentralized Reputation Passport
 
-A decentralized certificate system using Soulbound Tokens (SBTs) for issuing and managing credentials on the blockchain.
+ProofPass is a decentralized reputation and certification system built on blockchain technology that enables the issuance, verification, and management of non-transferable (soulbound) certificates. The platform serves as a trustless and transparent way to establish and verify professional credentials, achievements, and reputation in the digital space.
 
-## Features
+## 🚀 Features
 
-- Issue non-transferable certificates as Soulbound Tokens
-- Store certificate metadata on IPFS (via Pinata)
-- View and manage certificates
-- Share certificate proofs
-- Role-based access control for issuers
+- **Soulbound Certificates**: Non-transferable NFT-based certificates permanently bound to recipients
+- **Issuer Management**: Multi-level authorization system for certificate issuers
+- **Certificate Management**: Secure issuance and immutable record-keeping
+- **Opportunity Management**: Platform for posting and managing opportunities
+- **GitHub Integration**: Developer verification through GitHub usernames
+- **IPFS Storage**: Decentralized storage for certificate metadata
 
-## Tech Stack
+## 🛠️ Tech Stack
 
-- **Smart Contracts**: Solidity (ERC721 + Soulbound logic)
-- **Frontend**: Next.js + React + TypeScript
-- **Styling**: Chakra UI + Tailwind CSS
-- **Blockchain**: Ethereum (Sepolia testnet)
-- **Storage**: Pinata IPFS for metadata
-- **Wallet Integration**: MetaMask
+- **Frontend**: Next.js 13, React, Chakra UI, Tailwind CSS
+- **Smart Contracts**: Solidity (v0.8.20), OpenZeppelin
+- **Blockchain**: Ethereum (Sepolia Testnet)
+- **Development**: Hardhat, TypeScript, Web3Modal
+- **Storage**: IPFS (Pinata)
 
-## Getting Started
-
-### Prerequisites
+## 📋 Prerequisites
 
 - Node.js (v16 or higher)
-- MetaMask wallet
-- Pinata account (for IPFS storage)
+- npm or yarn
+- MetaMask or similar Web3 wallet
+- Git
 
-### Installation
+## 🚀 Getting Started
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd soulbound-certificates
-```
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/ProofPass-The-Decentralized-Reputation-Passport.git
+   cd ProofPass-The-Decentralized-Reputation-Passport
+   ```
 
-2. Install dependencies:
-```bash
-npm install
-```
+2. **Install dependencies**
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
 
-3. Create a `.env` file:
-```bash
-cp .env.example .env
-```
-Fill in your environment variables in the `.env` file:
-```
-SEPOLIA_RPC_URL=your-sepolia-rpc-url
-PRIVATE_KEY=your-private-key
-NEXT_PUBLIC_PINATA_API_KEY=your-pinata-api-key
-NEXT_PUBLIC_PINATA_API_SECRET=your-pinata-api-secret
-```
+3. **Set up environment variables**
+   Create a `.env.local` file in the root directory with the following variables:
+   ```env
+   SEPOLIA_RPC_URL=your_sepolia_rpc_url
+   PRIVATE_KEY=your_wallet_private_key
+   NEXT_PUBLIC_PINATA_API_KEY=your_pinata_api_key
+   NEXT_PUBLIC_PINATA_API_SECRET=your_pinata_api_secret
+   NEXT_PUBLIC_CONTRACT_ADDRESS=your_deployed_contract_address
+   NEXT_PUBLIC_OPPORTUNITY_MANAGER_ADDRESS=your_deployed_opportunity_manager_address
+   ```
 
-4. Compile smart contracts:
-```bash
-npm run compile
-```
+4. **Compile smart contracts**
+   ```bash
+   npx hardhat compile
+   ```
 
-5. Deploy smart contracts:
-```bash
-npm run deploy
-```
+5. **Deploy contracts locally**
+   ```bash
+   # Start local Hardhat node
+   npx hardhat node
 
-6. Start the development server:
-```bash
-npm run dev
-```
+   # In a new terminal, deploy contracts
+   npx hardhat run scripts/deploy.ts --network localhost
+   ```
 
-## Smart Contract
+6. **Run the development server**
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   ```
 
-The `SoulboundCertificate` contract implements:
-- Non-transferable NFTs (Soulbound Tokens)
-- Role-based access control for issuers
-- IPFS metadata storage
-- Certificate issuance and management
+Visit `http://localhost:3000` to see the application.
 
-## Frontend
+## 📝 Smart Contract Deployment
 
-The frontend application provides:
-- Issuer dashboard for creating certificates
-- Recipient view for managing certificates
-- Certificate sharing and verification
-- Wallet connection and transaction management
+### Local Development
+1. Start a local Hardhat node:
+   ```bash
+   npx hardhat node
+   ```
 
-## Getting API Keys
+2. Deploy contracts to the local network:
+   ```bash
+   npx hardhat run scripts/deploy.ts --network localhost
+   ```
 
-### MetaMask Developer (Sepolia RPC)
-1. Go to [MetaMask Developer Portal](https://portfolio.metamask.io/)
-2. Create a new project
-3. Select Sepolia network
-4. Copy the RPC URL
+3. Update your `.env.local` file with the deployed contract addresses.
 
-### Pinata (IPFS)
-1. Go to [Pinata](https://app.pinata.cloud/register)
-2. Create an account
-3. Go to API Keys section
-4. Create a new API key
-5. Copy the API Key and Secret Key
+### Sepolia Testnet Deployment
+1. Ensure your `.env.local` file has the correct Sepolia RPC URL and private key.
+2. Deploy to Sepolia:
+   ```bash
+   npx hardhat run scripts/deploy.ts --network sepolia
+   ```
+3. Update your `.env.local` file with the deployed contract addresses.
 
-## License
+## 🔑 Environment Variables
 
-MIT
+| Variable | Description |
+|----------|-------------|
+| `SEPOLIA_RPC_URL` | RPC URL for Sepolia testnet |
+| `PRIVATE_KEY` | Your wallet's private key for deployment |
+| `NEXT_PUBLIC_PINATA_API_KEY` | Pinata API key for IPFS storage |
+| `NEXT_PUBLIC_PINATA_API_SECRET` | Pinata API secret for IPFS storage |
+| `NEXT_PUBLIC_CONTRACT_ADDRESS` | Deployed SoulboundCertificate contract address |
+| `NEXT_PUBLIC_OPPORTUNITY_MANAGER_ADDRESS` | Deployed OpportunityManager contract address |
 
-## Contributing
+## 📚 Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build production application
+- `npm run start` - Start production server
+- `npm run compile` - Compile smart contracts
+- `npm run test` - Run smart contract tests
+- `npm run deploy` - Deploy contracts to local network
+
+## 🔒 Security
+
+- Smart contracts are built using OpenZeppelin's secure implementations
+- Role-based access control for issuer management
+- Immutable certificate records
+- Transparent activity logging
+
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request 
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
