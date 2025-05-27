@@ -9,11 +9,11 @@ import { BaseContract, ContractTransactionResponse } from 'ethers'
 const contractABI = [
   "function getTotalOpportunities() view returns (uint256)",
   "function createOpportunity(string memory _title, string memory _description, string memory _requirements) returns (uint256)",
-  "function submitApplication(uint256 _opportunityId, string[] memory _certificateIds, string memory _githubUsername) returns (uint256)",
+  "function submitApplication(uint256 _opportunityId, string[] memory _certificateIds, string memory _githubUsername, string memory _email) returns (uint256)",
   "function updateApplicationStatus(uint256 _applicationId, string memory _status)",
   "function toggleOpportunityStatus(uint256 _opportunityId)",
   "function getOpportunity(uint256 _opportunityId) view returns (tuple(uint256 id, address provider, string title, string description, string requirements, bool isActive, uint256 createdAt))",
-  "function getApplication(uint256 _applicationId) view returns (tuple(uint256 id, uint256 opportunityId, address applicant, string[] certificateIds, string githubUsername, string status, uint256 createdAt))",
+  "function getApplication(uint256 _applicationId) view returns (tuple(uint256 id, uint256 opportunityId, address applicant, string[] certificateIds, string githubUsername, string email, string status, uint256 createdAt))",
   "function getOpportunityApplications(uint256 _opportunityId) view returns (uint256[])",
   "function getApplicantApplications(address _applicant) view returns (uint256[])"
 ]
@@ -37,6 +37,7 @@ interface Application {
   applicant: string
   certificateIds: string[]
   githubUsername: string
+  email: string
   status: 'pending' | 'accepted' | 'rejected'
   createdAt: number
 }
@@ -49,7 +50,7 @@ interface OpportunityContextType {
   isLoading: boolean
   error: string | null
   createOpportunity: (title: string, description: string, requirements: string) => Promise<void>
-  submitApplication: (opportunityId: number, certificateIds: string[], githubUsername: string) => Promise<void>
+  submitApplication: (opportunityId: number, certificateIds: string[], githubUsername: string, email: string) => Promise<void>
   updateApplicationStatus: (applicationId: number, status: 'pending' | 'accepted' | 'rejected') => Promise<void>
   toggleOpportunityStatus: (opportunityId: number) => Promise<void>
   refreshOpportunities: () => Promise<void>
@@ -103,6 +104,7 @@ export function OpportunityProvider({ children }: { children: React.ReactNode })
             applicant: application.applicant,
             certificateIds: application.certificateIds,
             githubUsername: application.githubUsername,
+            email: application.email,
             status,
             createdAt: Number(application.createdAt)
           })
@@ -157,6 +159,7 @@ export function OpportunityProvider({ children }: { children: React.ReactNode })
           applicant: application.applicant,
           certificateIds: application.certificateIds,
           githubUsername: application.githubUsername,
+          email: application.email,
           status,
           createdAt: Number(application.createdAt)
         })
@@ -197,7 +200,8 @@ export function OpportunityProvider({ children }: { children: React.ReactNode })
   const submitApplication = useCallback(async (
     opportunityId: number,
     certificateIds: string[],
-    githubUsername: string
+    githubUsername: string,
+    email: string
   ) => {
     if (!contract || !provider) throw new Error('Contract or provider not available')
 
@@ -211,7 +215,8 @@ export function OpportunityProvider({ children }: { children: React.ReactNode })
       const tx = await contractWithSigner.submitApplication(
         opportunityId,
         certificateIds,
-        githubUsername
+        githubUsername,
+        email
       )
       await tx.wait()
 

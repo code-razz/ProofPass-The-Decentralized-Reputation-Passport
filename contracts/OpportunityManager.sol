@@ -25,6 +25,7 @@ contract OpportunityManager is Ownable {
         address applicant;
         string[] certificateIds;
         string githubUsername;
+        string email;
         string status; // "pending", "accepted", "rejected"
         uint256 createdAt;
     }
@@ -73,7 +74,8 @@ contract OpportunityManager is Ownable {
     function submitApplication(
         uint256 _opportunityId,
         string[] memory _certificateIds,
-        string memory _githubUsername
+        string memory _githubUsername,
+        string memory _email
     ) external returns (uint256) {
         require(opportunities[_opportunityId].isActive, "Opportunity is not active");
         require(opportunities[_opportunityId].provider != msg.sender, "Provider cannot apply to their own opportunity");
@@ -87,6 +89,7 @@ contract OpportunityManager is Ownable {
             applicant: msg.sender,
             certificateIds: _certificateIds,
             githubUsername: _githubUsername,
+            email: _email,
             status: "pending",
             createdAt: block.timestamp
         });

@@ -31,6 +31,7 @@ import {
   CheckboxGroup,
   Checkbox,
   Stack,
+  FormHelperText,
 } from '@chakra-ui/react'
 import { useOpportunity } from '../../context/OpportunityContext'
 import { useWeb3Modal } from '../../context/Web3ModalContext'
@@ -65,6 +66,7 @@ export default function OpportunityDetailsPage() {
   const [githubUsername, setGithubUsername] = useState('')
   const [isLoadingGithub, setIsLoadingGithub] = useState(false)
   const [userCertificates, setUserCertificates] = useState<Certificate[]>([])
+  const [email, setEmail] = useState('')
 
   useEffect(() => {
     refreshOpportunities()
@@ -231,8 +233,19 @@ export default function OpportunityDetailsPage() {
       }
     }
 
+    if (!email) {
+      toast({
+        title: 'Error',
+        description: 'Please enter your email address',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
+
     try {
-      await submitApplication(Number(id), selectedCertificates, githubUsername)
+      await submitApplication(Number(id), selectedCertificates, githubUsername, email)
       toast({
         title: 'Success',
         description: 'Application submitted successfully',
@@ -347,31 +360,25 @@ export default function OpportunityDetailsPage() {
             <ModalCloseButton />
             <ModalBody pb={6}>
               <VStack spacing={4}>
-                <FormControl>
+                <FormControl isRequired>
                   <FormLabel>Select Certificates</FormLabel>
-                  <CheckboxGroup
-                    colorScheme="blue"
-                    value={selectedCertificates}
-                    onChange={(values) => setSelectedCertificates(values as string[])}
-                  >
-                    <Stack spacing={2}>
-                      {userCertificates.map((cert) => (
-                        <Checkbox key={cert.id} value={cert.id.toString()}>
-                          <VStack align="start" spacing={0}>
-                            <Text fontWeight="medium">{cert.name}</Text>
-                            <Text fontSize="sm" color="gray.500">
-                              Issued by: {cert.issuer.slice(0, 6)}...{cert.issuer.slice(-4)}
-                            </Text>
-                          </VStack>
-                        </Checkbox>
-                      ))}
-                    </Stack>
-                  </CheckboxGroup>
-                  {userCertificates.length === 0 && (
-                    <Text color="gray.500" mt={2}>
-                      No certificates available. Please obtain certificates first.
-                    </Text>
-                  )}
+                  <VStack align="stretch" spacing={2}>
+                    {userCertificates.map((certificate) => (
+                      <Checkbox
+                        key={certificate.id}
+                        isChecked={selectedCertificates.includes(certificate.id.toString())}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedCertificates([...selectedCertificates, certificate.id.toString()])
+                          } else {
+                            setSelectedCertificates(selectedCertificates.filter(id => id !== certificate.id.toString()))
+                          }
+                        }}
+                      >
+                        {certificate.name}
+                      </Checkbox>
+                    ))}
+                  </VStack>
                 </FormControl>
 
                 <FormControl isRequired>
@@ -380,7 +387,7 @@ export default function OpportunityDetailsPage() {
                     value={githubUsername}
                     onChange={(e) => setGithubUsername(e.target.value)}
                     placeholder="Enter your GitHub username"
-                    isReadOnly={!!githubUsername} // Make readonly if fetched from contract
+                    isReadOnly={!!githubUsername}
                     isDisabled={isLoadingGithub}
                   />
                   {isLoadingGithub && (
@@ -395,13 +402,26 @@ export default function OpportunityDetailsPage() {
                   )}
                 </FormControl>
 
+                <FormControl isRequired>
+                  <FormLabel>Email Address</FormLabel>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email address"
+                  />
+                  <FormHelperText>
+                    This will be shared with the opportunity provider
+                  </FormHelperText>
+                </FormControl>
+
                 <Button
                   colorScheme="blue"
                   width="full"
                   onClick={handleApply}
                   isLoading={isLoading}
                   loadingText="Submitting..."
-                  isDisabled={selectedCertificates.length === 0 || !githubUsername}
+                  isDisabled={selectedCertificates.length === 0 || !githubUsername || !email}
                 >
                   Submit Application
                 </Button>

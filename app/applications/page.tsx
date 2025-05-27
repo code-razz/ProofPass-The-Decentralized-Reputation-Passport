@@ -63,6 +63,7 @@ interface ApplicationDetails {
   id: number
   applicant: string
   githubUsername: string
+  email: string
   certificateIds: string[]
   status: string
   createdAt: number
@@ -571,6 +572,7 @@ export default function ApplicationsPage() {
                   <Heading size="sm" mb={2}>Applicant Information</Heading>
                   <Text>Address: {selectedApplication.applicant}</Text>
                   <Text>GitHub: {selectedApplication.githubUsername}</Text>
+                  <Text>Email: {selectedApplication.email}</Text>
                   <Text>Applied: {new Date(selectedApplication.createdAt * 1000).toLocaleDateString()}</Text>
                   <Badge colorScheme={
                     selectedApplication.status === 'accepted' ? 'green' :
