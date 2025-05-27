@@ -23,6 +23,22 @@ import {
   CardFooter,
   Button,
   Divider,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalCloseButton,
+  useDisclosure,
+  Image,
+  Link as ChakraLink,
+  TableContainer,
+  Table,
+  Thead,
+  Tr,
+  Th,
+  Tbody,
+  Td,
 } from '@chakra-ui/react'
 import { useOpportunity } from '../context/OpportunityContext'
 import { useWeb3Modal } from '../context/Web3ModalContext'
@@ -30,6 +46,7 @@ import { useEffect, useCallback, useState, useRef } from 'react'
 import Link from 'next/link'
 import { ethers } from 'ethers'
 import SoulboundCertificate from '../../artifacts/contracts/SoulboundCertificate.sol/SoulboundCertificate.json'
+import axios from 'axios'
 
 // Add contract address constant
 const CERTIFICATE_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
@@ -40,6 +57,89 @@ interface Certificate {
   description: string
   issuer: string
   issueDate: string
+}
+
+interface ApplicationDetails {
+  id: number
+  applicant: string
+  githubUsername: string
+  certificateIds: string[]
+  status: string
+  createdAt: number
+  opportunityId: number
+}
+
+// Add interfaces for GitHub data
+interface RepoStats {
+  name: string
+  stars: number
+  forks: number
+}
+
+interface PullRequest {
+  repo: string
+  title: string
+  number: number
+  merged: boolean
+  created_at: string
+}
+
+// Add GitHub data fetching functions
+async function getUserReposWithStats(username: string): Promise<RepoStats[]> {
+  const result: RepoStats[] = []
+  let page = 1
+  let hasMore = true
+
+  while (hasMore) {
+    const url = `https://api.github.com/users/${username}/repos?per_page=100&page=${page}`
+    const res = await axios.get(url)
+    const repos = res.data
+
+    for (const repo of repos) {
+      if (!repo.fork && (repo.stargazers_count > 0 || repo.forks_count > 0)) {
+        result.push({
+          name: repo.name,
+          stars: repo.stargazers_count,
+          forks: repo.forks_count,
+        })
+      }
+    }
+
+    hasMore = repos.length === 100
+    page++
+  }
+
+  return result
+}
+
+async function getUserPRsWithMergeStatus(username: string): Promise<PullRequest[]> {
+  const searchUrl = `https://api.github.com/search/issues?q=type:pr+author:${username}&per_page=30`
+  const searchRes = await axios.get(searchUrl)
+  const items = searchRes.data.items
+
+  const prs: PullRequest[] = []
+
+  for (const pr of items) {
+    const [owner, repo] = pr.repository_url.replace("https://api.github.com/repos/", "").split("/")
+    const prNumber = pr.number
+
+    try {
+      const prUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`
+      const prDetails = await axios.get(prUrl)
+
+      prs.push({
+        repo: `${owner}/${repo}`,
+        title: pr.title,
+        number: prNumber,
+        merged: prDetails.data.merged,
+        created_at: pr.created_at,
+      })
+    } catch (err: any) {
+      console.error(`Error fetching PR #${prNumber} from ${owner}/${repo}: ${err.message}`)
+    }
+  }
+
+  return prs
 }
 
 export default function ApplicationsPage() {
@@ -58,6 +158,12 @@ export default function ApplicationsPage() {
   const toast = useToast()
   const [certificateDetails, setCertificateDetails] = useState<Record<string, Certificate>>({})
   const fetchedCertificates = useRef<Set<string>>(new Set())
+  const { isOpen, onOpen, onClose } = useDisclosure()
+  const [selectedApplication, setSelectedApplication] = useState<ApplicationDetails | null>(null)
+  const [githubData, setGithubData] = useState<any>(null)
+  const [isLoadingGithub, setIsLoadingGithub] = useState(false)
+  const [repos, setRepos] = useState<RepoStats[]>([])
+  const [prs, setPrs] = useState<PullRequest[]>([])
 
   // Update fetchCertificateDetails to use ref instead of state
   const fetchCertificateDetails = useCallback(async (certificateIds: string[]) => {
@@ -188,6 +294,39 @@ export default function ApplicationsPage() {
         isClosable: true,
       })
     }
+  }
+
+  // Update fetchGithubData function
+  const fetchGithubData = async (username: string) => {
+    setIsLoadingGithub(true)
+    setRepos([])
+    setPrs([])
+    try {
+      const [fetchedRepos, fetchedPrs] = await Promise.all([
+        getUserReposWithStats(username),
+        getUserPRsWithMergeStatus(username)
+      ])
+      setRepos(fetchedRepos)
+      setPrs(fetchedPrs)
+    } catch (error) {
+      console.error('Error fetching GitHub data:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch GitHub data',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    } finally {
+      setIsLoadingGithub(false)
+    }
+  }
+
+  // Add function to handle application click
+  const handleApplicationClick = (application: ApplicationDetails) => {
+    setSelectedApplication(application)
+    fetchGithubData(application.githubUsername)
+    onOpen()
   }
 
   if (!isConnected) {
@@ -343,7 +482,16 @@ export default function ApplicationsPage() {
                     <CardBody>
                       <VStack spacing={4} align="stretch">
                         {opportunity.applications?.map((application: any) => (
-                          <Box key={application.id} p={4} borderWidth={1} borderRadius="md">
+                          <Box 
+                            key={application.id} 
+                            p={4} 
+                            borderWidth={1} 
+                            borderRadius="md"
+                            cursor="pointer"
+                            onClick={() => handleApplicationClick(application)}
+                            _hover={{ bg: 'gray.50' }}
+                            transition="background-color 0.2s"
+                          >
                             <VStack align="start" spacing={2}>
                               <HStack justify="space-between" width="full">
                                 <Text fontWeight="bold">
@@ -381,24 +529,6 @@ export default function ApplicationsPage() {
                                   </Text>
                                 ))}
                               </Box>
-                              {application.status === 'pending' && (
-                                <HStack>
-                                  <Button
-                                    colorScheme="green"
-                                    size="sm"
-                                    onClick={() => handleStatusUpdate(application.id, 'accepted')}
-                                  >
-                                    Accept
-                                  </Button>
-                                  <Button
-                                    colorScheme="red"
-                                    size="sm"
-                                    onClick={() => handleStatusUpdate(application.id, 'rejected')}
-                                  >
-                                    Reject
-                                  </Button>
-                                </HStack>
-                              )}
                             </VStack>
                           </Box>
                         ))}
@@ -424,6 +554,184 @@ export default function ApplicationsPage() {
           </TabPanels>
         </Tabs>
       </VStack>
+
+      {/* Add Modal for detailed view */}
+      <Modal isOpen={isOpen} onClose={onClose} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            Application Details
+            <ModalCloseButton />
+          </ModalHeader>
+          <ModalBody pb={6}>
+            {selectedApplication && (
+              <VStack spacing={6} align="stretch">
+                {/* Applicant Info */}
+                <Box>
+                  <Heading size="sm" mb={2}>Applicant Information</Heading>
+                  <Text>Address: {selectedApplication.applicant}</Text>
+                  <Text>GitHub: {selectedApplication.githubUsername}</Text>
+                  <Text>Applied: {new Date(selectedApplication.createdAt * 1000).toLocaleDateString()}</Text>
+                  <Badge colorScheme={
+                    selectedApplication.status === 'accepted' ? 'green' :
+                    selectedApplication.status === 'rejected' ? 'red' : 'yellow'
+                  }>
+                    {selectedApplication.status.charAt(0).toUpperCase() + selectedApplication.status.slice(1)}
+                  </Badge>
+                </Box>
+
+                <Divider />
+
+                {/* Certificates */}
+                <Box>
+                  <Heading size="sm" mb={2}>Certificates</Heading>
+                  <VStack align="stretch" spacing={3}>
+                    {selectedApplication.certificateIds.map((certId) => {
+                      const cert = certificateDetails[certId]
+                      return (
+                        <Card key={certId} variant="outline">
+                          <CardBody>
+                            <VStack align="start" spacing={2}>
+                              <Heading size="sm">{cert?.name || `Certificate #${certId}`}</Heading>
+                              <Text fontSize="sm">{cert?.description}</Text>
+                              <HStack>
+                                <Text fontSize="sm" color="gray.500">Issued by:</Text>
+                                <Text fontSize="sm">{cert?.issuer || 'Unknown'}</Text>
+                              </HStack>
+                              <Text fontSize="sm" color="gray.500">Issued on: {cert?.issueDate || 'Unknown'}</Text>
+                            </VStack>
+                          </CardBody>
+                        </Card>
+                      )
+                    })}
+                  </VStack>
+                </Box>
+
+                <Divider />
+
+                {/* GitHub Contributions */}
+                <Box>
+                  <Heading size="sm" mb={2}>GitHub Contributions</Heading>
+                  {isLoadingGithub ? (
+                    <Spinner />
+                  ) : (
+                    <VStack spacing={6} align="stretch">
+                      {repos.length > 0 && (
+                        <Card variant="outline">
+                          <CardHeader>
+                            <Heading size="md">Repositories with Stars or Forks</Heading>
+                          </CardHeader>
+                          <CardBody p={0}>
+                            <TableContainer>
+                              <Table variant="simple" size="sm">
+                                <Thead>
+                                  <Tr>
+                                    <Th>Repository</Th>
+                                    <Th isNumeric>Stars</Th>
+                                    <Th isNumeric>Forks</Th>
+                                  </Tr>
+                                </Thead>
+                                <Tbody>
+                                  {repos.map((repo, index) => (
+                                    <Tr key={index}>
+                                      <Td>
+                                        <ChakraLink 
+                                          href={`https://github.com/${selectedApplication?.githubUsername}/${repo.name}`} 
+                                          isExternal
+                                        >
+                                          {repo.name}
+                                        </ChakraLink>
+                                      </Td>
+                                      <Td isNumeric>{repo.stars}</Td>
+                                      <Td isNumeric>{repo.forks}</Td>
+                                    </Tr>
+                                  ))}
+                                </Tbody>
+                              </Table>
+                            </TableContainer>
+                          </CardBody>
+                        </Card>
+                      )}
+
+                      {prs.length > 0 && (
+                        <Card variant="outline">
+                          <CardHeader>
+                            <Heading size="md">Authored Pull Requests</Heading>
+                          </CardHeader>
+                          <CardBody p={0}>
+                            <TableContainer>
+                              <Table variant="simple" size="sm">
+                                <Thead>
+                                  <Tr>
+                                    <Th>Pull Request</Th>
+                                    <Th>Title</Th>
+                                    <Th>Status</Th>
+                                  </Tr>
+                                </Thead>
+                                <Tbody>
+                                  {prs.map((pr, index) => (
+                                    <Tr key={index}>
+                                      <Td>
+                                        <ChakraLink 
+                                          href={`https://github.com/${pr.repo}/pull/${pr.number}`} 
+                                          isExternal
+                                        >
+                                          {pr.repo} PR #{pr.number}
+                                        </ChakraLink>
+                                      </Td>
+                                      <Td>{pr.title}</Td>
+                                      <Td>
+                                        <Badge colorScheme={pr.merged ? 'green' : 'red'}>
+                                          {pr.merged ? 'Merged' : 'Not Merged'}
+                                        </Badge>
+                                      </Td>
+                                    </Tr>
+                                  ))}
+                                </Tbody>
+                              </Table>
+                            </TableContainer>
+                          </CardBody>
+                        </Card>
+                      )}
+
+                      {repos.length === 0 && prs.length === 0 && (
+                        <Alert status="info">
+                          <AlertIcon />
+                          No GitHub contributions found
+                        </Alert>
+                      )}
+                    </VStack>
+                  )}
+                </Box>
+
+                {/* Action Buttons */}
+                {selectedApplication.status === 'pending' && (
+                  <HStack justify="flex-end" spacing={4}>
+                    <Button
+                      colorScheme="green"
+                      onClick={() => {
+                        handleStatusUpdate(selectedApplication.id, 'accepted')
+                        onClose()
+                      }}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      colorScheme="red"
+                      onClick={() => {
+                        handleStatusUpdate(selectedApplication.id, 'rejected')
+                        onClose()
+                      }}
+                    >
+                      Reject
+                    </Button>
+                  </HStack>
+                )}
+              </VStack>
+            )}
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </Container>
   )
 } 
