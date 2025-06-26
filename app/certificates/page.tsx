@@ -27,7 +27,7 @@ import SoulboundCertificate from '../../artifacts/contracts/SoulboundCertificate
 import GithubContributions from '../components/GithubContributions'
 
 // Add contract address constant
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_SOULBOUND_CERTIFICATE_ADDRESS
 
 interface Certificate {
   id: number

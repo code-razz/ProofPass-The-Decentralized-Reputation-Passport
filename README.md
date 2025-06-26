@@ -48,7 +48,7 @@ ProofPass is a decentralized reputation and certification system built on blockc
    PRIVATE_KEY=your_wallet_private_key
    NEXT_PUBLIC_PINATA_API_KEY=your_pinata_api_key
    NEXT_PUBLIC_PINATA_API_SECRET=your_pinata_api_secret
-   NEXT_PUBLIC_CONTRACT_ADDRESS=your_deployed_contract_address
+   NEXT_PUBLIC_SOULBOUND_CERTIFICATE_ADDRESS=your_deployed_contract_address
    NEXT_PUBLIC_OPPORTUNITY_MANAGER_ADDRESS=your_deployed_opportunity_manager_address
    ```
 
@@ -106,7 +106,7 @@ Visit `http://localhost:3000` to see the application.
 | `PRIVATE_KEY` | Your wallet's private key for deployment |
 | `NEXT_PUBLIC_PINATA_API_KEY` | Pinata API key for IPFS storage |
 | `NEXT_PUBLIC_PINATA_API_SECRET` | Pinata API secret for IPFS storage |
-| `NEXT_PUBLIC_CONTRACT_ADDRESS` | Deployed SoulboundCertificate contract address |
+| `NEXT_PUBLIC_SOULBOUND_CERTIFICATE_ADDRESS` | Deployed SoulboundCertificate contract address |
 | `NEXT_PUBLIC_OPPORTUNITY_MANAGER_ADDRESS` | Deployed OpportunityManager contract address |
 
 ## 📚 Available Scripts

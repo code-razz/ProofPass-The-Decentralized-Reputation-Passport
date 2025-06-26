@@ -41,7 +41,7 @@ import { ethers } from 'ethers'
 import SoulboundCertificate from '../../../artifacts/contracts/SoulboundCertificate.sol/SoulboundCertificate.json'
 
 // Add contract address constant
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_SOULBOUND_CERTIFICATE_ADDRESS
 
 interface Certificate {
   id: number

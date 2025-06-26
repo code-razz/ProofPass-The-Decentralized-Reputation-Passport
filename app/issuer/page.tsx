@@ -28,7 +28,7 @@ const PINATA_API_KEY = process.env.NEXT_PUBLIC_PINATA_API_KEY
 const PINATA_API_SECRET = process.env.NEXT_PUBLIC_PINATA_API_SECRET
 
 // Add contract address constant
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_SOULBOUND_CERTIFICATE_ADDRESS
 
 // Debug logging
 console.log('Environment check:', {

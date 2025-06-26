@@ -49,7 +49,7 @@ import SoulboundCertificate from '../../artifacts/contracts/SoulboundCertificate
 import axios from 'axios'
 
 // Add contract address constant
-const CERTIFICATE_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
+const CERTIFICATE_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_SOULBOUND_CERTIFICATE_ADDRESS
 
 interface Certificate {
   id: number

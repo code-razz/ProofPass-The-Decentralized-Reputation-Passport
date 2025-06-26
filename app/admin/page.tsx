@@ -26,7 +26,7 @@ import { useWeb3Modal } from '../context/Web3ModalContext'
 import { ethers } from 'ethers'
 import SoulboundCertificate from '../../artifacts/contracts/SoulboundCertificate.sol/SoulboundCertificate.json'
 
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_SOULBOUND_CERTIFICATE_ADDRESS
 
 interface Issuer {
   address: string
