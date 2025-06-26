@@ -5,7 +5,7 @@ node_modules/
 .next/
 
 # Hardhat build outputs and cache
-artifacts/
+# artifacts/
 cache/
 typechain-types/
 
